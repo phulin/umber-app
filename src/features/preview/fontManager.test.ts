@@ -42,5 +42,6 @@ describe("FontManager", () => {
     expect(factory).toHaveBeenCalledWith("f-abc123", bytes, { style: "normal" });
     expect(add).toHaveBeenCalledWith(face);
     expect(root.classList.contains(pendingFontClass(font.fileHash))).toBe(false);
+    expect(document.head.querySelector('[data-umber-font-pending="abc123"]')).not.toBeNull();
   });
 });

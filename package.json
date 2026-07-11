@@ -12,6 +12,8 @@
     "format": "biome format --write .",
     "check": "biome check .",
     "test:e2e": "playwright test",
+    "verify:build": "node scripts/verify-build.mjs",
+    "audit:launch": "npm run build && npm run verify:build && npm run test:e2e",
     "cf:deploy": "npm run build && wrangler pages deploy dist --project-name umber-app"
   },
   "dependencies": {

@@ -17,7 +17,7 @@ describe("App", () => {
 
     dispose = render(() => <App />, root);
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(root.textContent).toContain("Browser-native TeX");
     expect(root.textContent).toContain("HTML Preview");

@@ -31,6 +31,7 @@ export class FontManager {
   readonly #root: HTMLElement;
   readonly #factory: FontFaceFactory;
   readonly #loads = new Map<string, Promise<string>>();
+  readonly #pendingRules = new Set<string>();
 
   constructor(
     cache: FontResourceCache,
@@ -54,6 +55,7 @@ export class FontManager {
     if (current) return current;
 
     const pendingClass = pendingFontClass(font.fileHash);
+    this.#installPendingRule(font.fileHash);
     this.#root.classList.add(pendingClass);
     const load = this.#load(font).finally(() => this.#root.classList.remove(pendingClass));
     this.#loads.set(font.fileHash, load);
@@ -72,5 +74,16 @@ export class FontManager {
     const loaded = await face.load();
     this.#fontSet.add(loaded);
     return family;
+  }
+
+  #installPendingRule(hash: string): void {
+    if (this.#pendingRules.has(hash)) return;
+    this.#pendingRules.add(hash);
+    const pendingClass = pendingFontClass(hash);
+    const family = fontFamilyForHash(hash);
+    const style = document.createElement("style");
+    style.dataset.umberFontPending = hash;
+    style.textContent = `html.${pendingClass} .${family}, html.${pendingClass} [style*="${family}"] { visibility: hidden !important; }`;
+    document.head.append(style);
   }
 }

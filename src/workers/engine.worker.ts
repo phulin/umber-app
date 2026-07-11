@@ -1,4 +1,5 @@
 import { BundleResolver } from "../features/resources/bundleResolver";
+import { scanTexDependencies } from "../features/resources/dependencyScanner";
 import { createResourceCache, type ResourceCache } from "../features/resources/resourceCache";
 import { WorkerSyncResourceCache } from "../features/resources/syncResourceCache";
 import {
@@ -24,6 +25,7 @@ type EngineInitOptions = {
 
 const scope = globalThis as unknown as WorkerScope;
 let engine: IncrementalTexEngine | undefined;
+let activeResolver: BundleResolver | undefined;
 
 const emit = (message: FromEngine) => scope.postMessage(message, transferablesFor(message));
 
@@ -53,6 +55,7 @@ async function boot(message: Extract<ToEngine, { t: "init" }>): Promise<void> {
     cache,
   });
   await resolver.init();
+  activeResolver = resolver;
   engine = await loadWasmEngine(options.moduleUrl, resolver, emit);
   await engine.handle(message);
 }
@@ -65,6 +68,13 @@ async function handle(raw: unknown): Promise<void> {
     return;
   }
   if (!engine) throw new Error("Engine received a command before init");
+  if (message.t === "openProject" && activeResolver) {
+    const decoder = new TextDecoder();
+    const dependencies = message.files.flatMap((file) =>
+      /\.(tex|sty|cls)$/i.test(file.path) ? scanTexDependencies(decoder.decode(file.bytes)) : [],
+    );
+    void activeResolver.prefetch(dependencies);
+  }
   await engine.handle(message);
 }
 

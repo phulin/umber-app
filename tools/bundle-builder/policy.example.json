@@ -1,0 +1,7 @@
+{
+  "include_prefixes": ["tex/", "fonts/"],
+  "exclude_prefixes": ["tex/context/"],
+  "preferred_paths": {
+    "article.cls": "tex/latex/base/article.cls"
+  }
+}

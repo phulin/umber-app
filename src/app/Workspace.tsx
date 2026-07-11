@@ -5,15 +5,23 @@ import {
   type LatencySummary,
   PerformanceMonitor,
 } from "../features/performance/performanceMonitor";
+import { FontManager } from "../features/preview/fontManager";
 import { IncrementalPreview } from "../features/preview/IncrementalPreview";
 import type { PatchMessage } from "../features/preview/previewDocument";
 import { ProjectAutosave } from "../features/projects/autosave";
 import { exportProjectZip } from "../features/projects/projectArchive";
 import type { ProjectStore } from "../features/projects/projectStore";
+import { BundleResolver } from "../features/resources/bundleResolver";
+import { createResourceCache } from "../features/resources/resourceCache";
 import { SpanIndex } from "../features/sync/spanIndex";
+import { TelemetryClient } from "../features/telemetry/telemetry";
 import { paragraphEditReplay } from "../features/tex-compile/__fixtures__/paragraph-edit";
 import { CompileOrchestrator } from "../features/tex-compile/compileOrchestrator";
-import { FakeEngineTransport } from "../features/tex-compile/engineTransport";
+import {
+  createWasmWorkerTransport,
+  FakeEngineTransport,
+  RestartableEngineTransport,
+} from "../features/tex-compile/engineTransport";
 import type { Diagnostic, SourceSpan } from "../features/tex-compile/protocol";
 
 export type WorkspaceDocument = { id: string; path: string; text: string };
@@ -28,6 +36,11 @@ type WorkspaceProps = {
 };
 
 export function Workspace(props: WorkspaceProps) {
+  const engineModuleUrl = import.meta.env.VITE_TEX_ENGINE_MODULE_URL as string | undefined;
+  const bundleBaseUrl = import.meta.env.VITE_TEX_BUNDLE_BASE_URL as string | undefined;
+  const configuredDigest = import.meta.env.VITE_TEX_BUNDLE_DIGEST as string | undefined;
+  const liveEngine = Boolean(engineModuleUrl && bundleBaseUrl && configuredDigest);
+  const bundleDigest = configuredDigest || "demo-bundle";
   const documents = props.documents.map((document) => {
     const [text, setText] = createSignal(document.text);
     return { ...document, text, setText };
@@ -48,7 +61,20 @@ export function Workspace(props: WorkspaceProps) {
   }>();
   const spans = new SpanIndex();
   const performanceMonitor = new PerformanceMonitor();
-  const orchestrator = new CompileOrchestrator(new FakeEngineTransport(paragraphEditReplay));
+  const telemetry = new TelemetryClient();
+  const [telemetryEnabled, setTelemetryEnabled] = createSignal(telemetry.enabled);
+  const orchestrator = new CompileOrchestrator(
+    liveEngine
+      ? new RestartableEngineTransport(createWasmWorkerTransport)
+      : new FakeEngineTransport(paragraphEditReplay),
+  );
+  const fontManager =
+    liveEngine && bundleBaseUrl
+      ? createResourceCache(bundleDigest).then((cache) => {
+          const resolver = new BundleResolver({ bundleDigest, baseUrl: bundleBaseUrl, cache });
+          return new FontManager({ get: (hash) => resolver.getFile(hash) });
+        })
+      : undefined;
   let autosave: ProjectAutosave | undefined;
   let detachLifecycle: (() => void) | undefined;
   let cursorRequestId = 0;
@@ -103,6 +129,13 @@ export function Workspace(props: WorkspaceProps) {
       if (message.t === "saturated") {
         setEngineStatus(`Compiling · ${message.queuedDeltas} edits queued`);
       }
+      if (message.t === "fontsNeeded" && fontManager) {
+        void fontManager
+          .then((manager) => manager.ensureAll(message.fonts))
+          .catch((error: unknown) => {
+            setEngineStatus(`Font load failed · ${error instanceof Error ? error.message : error}`);
+          });
+      }
       if (message.t === "patch") {
         setPreviewPatch(message);
         setPreviewEpoch(message.epoch);
@@ -116,7 +149,11 @@ export function Workspace(props: WorkspaceProps) {
     });
 
     orchestrator.initialize(
-      { t: "init", bundleDigest: "demo-bundle", engineOpts: { mode: "fake" } },
+      {
+        t: "init",
+        bundleDigest,
+        engineOpts: liveEngine ? { moduleUrl: engineModuleUrl, bundleBaseUrl } : { mode: "fake" },
+      },
       {
         entry: props.entry,
         files: documents.map((document) => ({
@@ -231,7 +268,9 @@ export function Workspace(props: WorkspaceProps) {
             onSourceSpan={(span: SourceSpan) => jumpToSource(span.docId, span.byteStart)}
             onPatchApplied={({ epoch, durationMs }) => {
               performanceMonitor.patchApplied(epoch, durationMs);
-              setLatency(performanceMonitor.summary());
+              const summary = performanceMonitor.summary();
+              setLatency(summary);
+              telemetry.sendPerformance(summary);
             }}
           />
         </section>
@@ -258,6 +297,17 @@ export function Workspace(props: WorkspaceProps) {
               <dd>{latency().latestPatchApplicationMs?.toFixed(1) ?? "—"} ms</dd>
             </div>
           </dl>
+          <label class="telemetry-preference">
+            <input
+              type="checkbox"
+              checked={telemetryEnabled()}
+              onChange={(event) => {
+                telemetry.setEnabled(event.currentTarget.checked);
+                setTelemetryEnabled(event.currentTarget.checked);
+              }}
+            />
+            Share anonymous performance metrics
+          </label>
         </div>
         <div>
           <h2>Diagnostics</h2>

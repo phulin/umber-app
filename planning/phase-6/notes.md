@@ -1,0 +1,26 @@
+# Phase 6 Notes: Bundle Pipeline, Hosting, Telemetry, and Launch Audit
+
+## Decisions
+- SHA-256 remains the sole bundle hash algorithm, matching the browser resolver.
+- Builder output uses `files/<hash>` plus `manifest-<digest>.json` with stable JSON ordering.
+- CI can supply a selected texmf directory initially; tarball extraction and font normalization are explicit preprocessing steps.
+- Telemetry is disabled by default and never includes source, paths, diagnostics, or rendered HTML.
+
+## Errors and Resolutions
+- `cargo fmt --check` identified two formatting differences before the first Rust test run. Resolution: format the crate, then verify `cargo fmt --check` and `cargo test`.
+- jsdom exposed a non-Storage `localStorage` placeholder, causing telemetry initialization to reject. Resolution: capability-check `getItem` and `setItem`, and tolerate unavailable storage.
+- The telemetry test's partial Storage and untyped mock sender passed Vitest but failed strict project TypeScript. Resolution: implement the complete Storage interface and explicitly type beacon arguments.
+- Completion audit found the workspace always selected the fake engine despite a production worker adapter. Resolution: choose the restartable WASM worker when all live environment values exist, share the main-thread resolver with `FontManager`, and prefetch scanned dependencies in the worker.
+
+## Verification
+- Rust: `cargo fmt --check` and 2 bundle-builder tests pass.
+- TypeScript: `npm run check` passes across 64 files; 22 test files and 44 tests pass.
+- Production: Vite build and `verify:build` pass, including worker emission, size cap, WASM MIME/cache policy, and SPA fallback.
+- Browser: 4 Chromium tests pass; cold demo renders in approximately 0.8 seconds in the latest run, below the 3-second gate.
+
+## External Inputs Still Required
+- Compatible engine module URL/export.
+- Bundle CDN base URL and digest.
+- Exact default font artifacts/family mapping from the real engine.
+- HTTPS deployment endpoint for CORS/cache verification.
+- Representative 30-page performance corpus for the live p50/p95, cold compile, memory, and selection audit.
