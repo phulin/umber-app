@@ -20,6 +20,8 @@ Make projects survive reload without accounts, provide portable ZIP backup/impor
 - [x] Persist demo edits in an isolated OPFS scratch namespace across refreshes
 - [x] Copy the current edited demo state, not only the original fixture, into a real project
 - [x] Add Chromium evidence for demo refresh persistence and edited-state copying
+- [x] Transfer imported binary project files to the engine without opening them as text
+- [x] Show binary resources in the project tree as non-editable assets
 
 ## Acceptance Evidence
 - Store tests prove the documented OPFS layout and round-trip persistence.
@@ -31,4 +33,4 @@ Make projects survive reload without accounts, provide portable ZIP backup/impor
 - `npm run check`, `npm run test`, `npm run build`, and `npm run test:e2e` pass.
 
 ## Status
-**Complete after audit remediation** — Demo scratch persistence and edited-state copying now satisfy §3.9 and pass Chromium verification.
+**Complete after binary-resource remediation** — Imported binaries persist, transfer byte-exactly to the engine, appear in the tree, and never open as text.

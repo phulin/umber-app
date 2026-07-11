@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { strToU8, zipSync } from "fflate";
 
 test("renders the app shell", async ({ page }) => {
   await page.goto("/");
@@ -69,4 +70,24 @@ test("persists demo scratch edits and copies their current state into a project"
   await expect(page.locator('[role="textbox"]:visible')).toContainText("% persisted note");
   await page.getByRole("button", { name: "Projects" }).click();
   await expect(page.getByRole("button", { name: /Umber demo/ })).toBeVisible();
+});
+
+test("imports binary project resources without opening them as text", async ({ page }) => {
+  await page.goto("/#/projects");
+  const archive = zipSync({
+    ".umber/manifest.json": strToU8(JSON.stringify({ name: "Binary paper", entry: "main.tex" })),
+    "main.tex": strToU8("\\documentclass{article}"),
+    "figures/plot.png": new Uint8Array([137, 80, 78, 71]),
+  });
+
+  await page.locator('input[accept*="zip"]').setInputFiles({
+    name: "paper.zip",
+    mimeType: "application/zip",
+    buffer: Buffer.from(archive),
+  });
+
+  await expect(page).toHaveURL(/#\/project\//);
+  await expect(page.getByText("figures/plot.png")).toBeVisible();
+  await expect(page.getByText("binary", { exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "figures/plot.png" })).toHaveCount(0);
 });

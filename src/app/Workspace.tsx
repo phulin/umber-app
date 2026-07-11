@@ -22,13 +22,33 @@ import {
   FakeEngineTransport,
   RestartableEngineTransport,
 } from "../features/tex-compile/engineTransport";
-import type { Diagnostic, SourceSpan } from "../features/tex-compile/protocol";
+import type { Diagnostic, ProjectFile, SourceSpan } from "../features/tex-compile/protocol";
 
 export type WorkspaceDocument = { id: string; path: string; text: string };
+export type WorkspaceBinaryFile = { id: string; path: string; bytes: Uint8Array };
+
+export function workspaceProjectFiles(
+  documents: readonly WorkspaceDocument[],
+  binaryFiles: readonly WorkspaceBinaryFile[],
+): ProjectFile[] {
+  return [
+    ...documents.map((document) => ({
+      docId: document.id,
+      path: document.path,
+      bytes: new TextEncoder().encode(document.text).buffer,
+    })),
+    ...binaryFiles.map((file) => {
+      const copy = new Uint8Array(file.bytes.byteLength);
+      copy.set(file.bytes);
+      return { docId: file.id, path: file.path, bytes: copy.buffer };
+    }),
+  ];
+}
 
 type WorkspaceProps = {
   name: string;
   documents: readonly WorkspaceDocument[];
+  binaryFiles?: readonly WorkspaceBinaryFile[];
   entry: string;
   readOnly?: boolean;
   project?: { id: string; store: ProjectStore; downloadable?: boolean };
@@ -156,11 +176,14 @@ export function Workspace(props: WorkspaceProps) {
       },
       {
         entry: props.entry,
-        files: documents.map((document) => ({
-          docId: document.id,
-          path: document.path,
-          bytes: new TextEncoder().encode(document.text()).buffer,
-        })),
+        files: workspaceProjectFiles(
+          documents.map((document) => ({
+            id: document.id,
+            path: document.path,
+            text: document.text(),
+          })),
+          props.binaryFiles ?? [],
+        ),
       },
     );
     onCleanup(unsubscribe);
@@ -216,7 +239,7 @@ export function Workspace(props: WorkspaceProps) {
         <aside class="panel file-tree">
           <div class="panel-heading">
             <span>Project</span>
-            <span class="muted">{documents.length} files</span>
+            <span class="muted">{documents.length + (props.binaryFiles?.length ?? 0)} files</span>
           </div>
           <ul>
             <For each={documents}>
@@ -229,6 +252,14 @@ export function Workspace(props: WorkspaceProps) {
                   >
                     {document.path}
                   </button>
+                </li>
+              )}
+            </For>
+            <For each={props.binaryFiles ?? []}>
+              {(file) => (
+                <li class="binary-file" title="Binary project resource">
+                  <span>{file.path}</span>
+                  <span class="binary-badge">binary</span>
                 </li>
               )}
             </For>

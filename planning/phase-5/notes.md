@@ -23,3 +23,8 @@
 - The demo workspace had no persistence adapter, so a refresh discarded edits despite §3.9 requiring OPFS scratch space. The earlier browser persistence test only covered copied real projects and was insufficient evidence for the demo requirement.
 - Resolution: parameterize the OPFS project-store namespace, create an isolated `/scratch/demo` project, reuse the 500 ms autosave/lifecycle flush path, and pass current workspace buffers into the copy action.
 - Updated Chromium evidence proves a scratch edit survives refresh, appears in the copied real project, and remains separate from the user project list until copied.
+
+## Binary Resource Audit
+- `ProjectScreen` filtered the manifest to editable extensions before loading files. This correctly avoided opening binaries in CodeMirror but also removed images/fonts/data from the engine project payload.
+- Remediation keeps editable document signals separate from immutable binary resources, lists both in the tree, and includes both in `openProject` transferables.
+- Verification imports a ZIP with a PNG payload in Chromium, shows the resource with a binary badge and no tab, while a unit test proves `workspaceProjectFiles` preserves exact bytes in the engine payload.

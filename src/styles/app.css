@@ -226,6 +226,23 @@ h2 {
   padding: 7px;
 }
 
+.binary-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 7px;
+  color: #77716a;
+}
+
+.binary-badge {
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: #ece7de;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+}
+
 .editor-tabs {
   display: flex;
   min-height: 44px;

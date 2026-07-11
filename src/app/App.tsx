@@ -6,7 +6,7 @@ import {
   OpfsProjectStore,
   type ProjectStore,
 } from "../features/projects/projectStore";
-import { Workspace, type WorkspaceDocument } from "./Workspace";
+import { Workspace, type WorkspaceBinaryFile, type WorkspaceDocument } from "./Workspace";
 
 const demoDocuments: WorkspaceDocument[] = [
   {
@@ -152,16 +152,16 @@ function ProjectScreen(props: { store: ProjectStore; id: string }) {
       if (!manifest) throw new Error(`Project not found: ${id}`);
       lease = await ProjectLockLease.acquire(id);
       const documents: WorkspaceDocument[] = [];
-      for (const path of manifest.files.filter((file) =>
-        /\.(tex|bib|sty|cls|md|txt)$/i.test(file),
-      )) {
-        documents.push({
-          id: path,
-          path,
-          text: new TextDecoder().decode(await props.store.readFile(id, path)),
-        });
+      const binaryFiles: WorkspaceBinaryFile[] = [];
+      for (const path of manifest.files) {
+        const bytes = await props.store.readFile(id, path);
+        if (/\.(tex|bib|sty|cls|md|txt)$/i.test(path)) {
+          documents.push({ id: path, path, text: new TextDecoder().decode(bytes) });
+        } else {
+          binaryFiles.push({ id: path, path, bytes });
+        }
       }
-      return { manifest, documents, readOnly: !lease.writable };
+      return { manifest, documents, binaryFiles, readOnly: !lease.writable };
     },
   );
   onCleanup(() => void lease?.release());
@@ -172,6 +172,7 @@ function ProjectScreen(props: { store: ProjectStore; id: string }) {
         <Workspace
           name={loaded().manifest.name}
           documents={loaded().documents}
+          binaryFiles={loaded().binaryFiles}
           entry={loaded().manifest.entry}
           readOnly={loaded().readOnly}
           project={{ id: loaded().manifest.id, store: props.store }}
