@@ -25,3 +25,8 @@
 - `npm run test`: passed, 3 files and 9 tests.
 - `npm run build`: passed with strict TypeScript and Vite production output.
 - `npm run test:e2e`: passed in Chromium, including the fake-engine HTML patch appearing in the preview.
+
+## Completion Audit Reopen
+- The initial golden stream exhausted after `openProject`. Edits were recorded by `FakeEngineTransport` but never generated progress/patch/diagnostic messages, so the demo did not prove keystroke-to-preview behavior.
+- Resolution: add a stateful fake-engine handler that owns project bytes, applies edit/add/remove messages, respects `cancel.beforeEpoch`, extracts the document body, and emits progress/patch/span/diagnostic/idle messages for epoch 0 and each edit.
+- Chromium reverse-syncs to the source span, replaces the line, observes `Updated preview.` in the preview, and verifies the performance panel receives an edit→patch sample.

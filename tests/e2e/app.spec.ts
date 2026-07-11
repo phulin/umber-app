@@ -23,6 +23,10 @@ test("renders the app shell", async ({ page }) => {
   await previewSpan.click();
   await expect(page.getByRole("textbox").first()).toBeFocused();
   await expect(previewSpan).toHaveClass(/source-sync-highlight/);
+  await page.keyboard.press("Shift+End");
+  await page.keyboard.type("Updated preview.");
+  await expect(previewSpan).toHaveText("Updated preview.");
+  await expect(page.getByText(/Edit → patch p50/).locator("..")).not.toContainText("— ms");
 });
 
 test("preserves independent editor documents while switching tabs", async ({ page }) => {

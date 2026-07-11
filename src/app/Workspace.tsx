@@ -15,11 +15,10 @@ import { BundleResolver } from "../features/resources/bundleResolver";
 import { createResourceCache } from "../features/resources/resourceCache";
 import { SpanIndex } from "../features/sync/spanIndex";
 import { TelemetryClient } from "../features/telemetry/telemetry";
-import { paragraphEditReplay } from "../features/tex-compile/__fixtures__/paragraph-edit";
 import { CompileOrchestrator } from "../features/tex-compile/compileOrchestrator";
+import { createDemoEngineTransport } from "../features/tex-compile/demoEngineTransport";
 import {
   createWasmWorkerTransport,
-  FakeEngineTransport,
   RestartableEngineTransport,
 } from "../features/tex-compile/engineTransport";
 import type { Diagnostic, ProjectFile, SourceSpan } from "../features/tex-compile/protocol";
@@ -86,7 +85,7 @@ export function Workspace(props: WorkspaceProps) {
   const orchestrator = new CompileOrchestrator(
     liveEngine
       ? new RestartableEngineTransport(createWasmWorkerTransport)
-      : new FakeEngineTransport(paragraphEditReplay),
+      : createDemoEngineTransport(),
   );
   const fontManager =
     liveEngine && bundleBaseUrl

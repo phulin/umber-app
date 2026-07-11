@@ -14,6 +14,8 @@ Lock the editor-to-engine protocol and its ordering invariants behind runtime va
 - [x] Make strict typecheck, Biome, unit tests, build, and e2e pass
 - [x] Integrate the fake engine with the app shell as the development path
 - [x] Review Phase 1 acceptance evidence and update the cross-phase plan
+- [x] Make the demo fake engine replay a deterministic compile stream after every edit
+- [x] Maintain byte-accurate fake project state and cancellation semantics
 
 ## Acceptance Evidence
 - Unit tests prove unknown messages are ignored.
@@ -24,4 +26,4 @@ Lock the editor-to-engine protocol and its ordering invariants behind runtime va
 - `npm run check`, `npm run test`, `npm run build`, and `npm run test:e2e` pass.
 
 ## Status
-**Complete** — The protocol boundary, fake engine, golden stream, stale-epoch filtering, app integration, and all verification gates pass.
+**Complete after interactive-demo remediation** — Project open and every accepted edit emit deterministic compile streams with byte-accurate spans.

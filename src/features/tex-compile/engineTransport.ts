@@ -18,6 +18,7 @@ export type FakeEngineStep = {
   afterMessage?: ToEngine["t"];
   emit: unknown;
 };
+export type FakeEngineHandler = (message: ToEngine) => readonly unknown[];
 
 /** Test/demo transport that replays recorded engine messages through the real decode boundary. */
 export class FakeEngineTransport implements EngineTransport {
@@ -25,10 +26,12 @@ export class FakeEngineTransport implements EngineTransport {
   readonly #listeners = new Set<EngineMessageListener>();
   readonly #errorListeners = new Set<EngineErrorListener>();
   readonly #steps: FakeEngineStep[];
+  readonly #handler?: FakeEngineHandler;
   #terminated = false;
 
-  constructor(steps: FakeEngineStep[] = []) {
+  constructor(steps: FakeEngineStep[] = [], handler?: FakeEngineHandler) {
     this.#steps = [...steps];
+    this.#handler = handler;
   }
 
   postMessage(message: ToEngine): void {
@@ -39,10 +42,11 @@ export class FakeEngineTransport implements EngineTransport {
       (step) => step.afterMessage === undefined || step.afterMessage === message.t,
     );
     for (const step of ready) this.#steps.splice(this.#steps.indexOf(step), 1);
+    const emitted = [...ready.map(({ emit }) => emit), ...(this.#handler?.(message) ?? [])];
 
-    if (ready.length > 0) {
+    if (emitted.length > 0) {
       queueMicrotask(() => {
-        for (const step of ready) this.emit(step.emit);
+        for (const output of emitted) this.emit(output);
       });
     }
   }
