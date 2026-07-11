@@ -13,10 +13,10 @@
 - Completion audit found the workspace always selected the fake engine despite a production worker adapter. Resolution: choose the restartable WASM worker when all live environment values exist, share the main-thread resolver with `FontManager`, and prefetch scanned dependencies in the worker.
 
 ## Verification
-- Rust: `cargo fmt --check` and 2 bundle-builder tests pass.
-- TypeScript: `npm run check` passes across 64 files; 22 test files and 44 tests pass.
+- Rust: `cargo fmt --check` and 3 bundle-builder tests pass.
+- TypeScript: `npm run check` passes across 68 files; 24 test files and 55 tests pass.
 - Production: Vite build and `verify:build` pass, including worker emission, size cap, WASM MIME/cache policy, and SPA fallback.
-- Browser: 4 Chromium tests pass; cold demo renders in approximately 0.8 seconds in the latest run, below the 3-second gate.
+- Browser: 5 Chromium tests pass; the cold demo remains below the 3-second gate.
 
 ## External Inputs Still Required
 - Compatible engine module URL/export.
@@ -29,3 +29,5 @@
 ## Completion Audit Reopen
 - §8.1 defines a TeX Live snapshot tarball as pipeline input. The initial Rust CLI accepted only an already-selected directory and documented extraction as external preprocessing, which was narrower than the accepted design.
 - Resolution: validate archive paths with `tar -tf`, extract through system `tar`, deterministically collapse single-directory wrappers, then run the same selection/conflict/hash pipeline. A Rust test proves tar and directory inputs emit identical manifest bytes and digest.
+- Telemetry audit: the existing opt-in beacon sent latency summaries only. §8.4 also names cache hit rates, worker-crash counts, and bundle fetch failures; these can be counted without collecting document-derived data and batched into the same beacon.
+- Resolution: instrument both main-thread and worker bundle resolvers for cache hits, cache misses, and manifest/resource fetch failures; distinguish hard worker failures in the protocol; and reset aggregate counters only after a successful opt-in beacon. Resolver, protocol, restart, and telemetry tests cover the full path without collecting document-derived values.

@@ -61,7 +61,11 @@ describe("RestartableEngineTransport", () => {
 
     transports[0]?.emitError(new Error("worker terminated"));
 
-    expect(messages).toContainEqual({ t: "fatal", message: "worker terminated" });
+    expect(messages).toContainEqual({
+      t: "fatal",
+      message: "worker terminated",
+      kind: "worker",
+    });
     expect(restartable.restartCount).toBe(1);
     expect(transports[1]?.received.map(({ t }) => t)).toEqual(["init", "openProject"]);
     restartable.terminate();

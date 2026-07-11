@@ -53,6 +53,7 @@ async function boot(message: Extract<ToEngine, { t: "init" }>): Promise<void> {
     bundleDigest: message.bundleDigest,
     baseUrl: options.bundleBaseUrl,
     cache,
+    onMetric: (metric) => emit({ t: "telemetry", metric }),
   });
   await resolver.init();
   activeResolver = resolver;

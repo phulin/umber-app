@@ -90,7 +90,12 @@ export function Workspace(props: WorkspaceProps) {
   const fontManager =
     liveEngine && bundleBaseUrl
       ? createResourceCache(bundleDigest).then((cache) => {
-          const resolver = new BundleResolver({ bundleDigest, baseUrl: bundleBaseUrl, cache });
+          const resolver = new BundleResolver({
+            bundleDigest,
+            baseUrl: bundleBaseUrl,
+            cache,
+            onMetric: (metric) => telemetry.recordHealth(metric),
+          });
           return new FontManager({ get: (hash) => resolver.getFile(hash) });
         })
       : undefined;
@@ -160,11 +165,15 @@ export function Workspace(props: WorkspaceProps) {
         setPreviewEpoch(message.epoch);
         spans.apply(message.epoch, message.spans);
       }
+      if (message.t === "telemetry") telemetry.recordHealth(message.metric);
       if (message.t === "diagnostics" && message.epoch >= diagnosticEpoch()) {
         setDiagnosticEpoch(message.epoch);
         setDiagnostics(message.items);
       }
-      if (message.t === "fatal") setEngineStatus(`Engine restarting · ${message.message}`);
+      if (message.t === "fatal") {
+        if (message.kind === "worker") telemetry.recordHealth("worker-crash");
+        setEngineStatus(`Engine restarting · ${message.message}`);
+      }
     });
 
     orchestrator.initialize(

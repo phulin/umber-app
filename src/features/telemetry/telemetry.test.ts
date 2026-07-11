@@ -29,10 +29,21 @@ describe("TelemetryClient", () => {
     expect(client.enabled).toBe(false);
     expect(client.sendPerformance(summary)).toBe(false);
     client.setEnabled(true);
+    client.recordHealth("cache-hit");
+    client.recordHealth("cache-miss");
+    client.recordHealth("worker-crash");
+    client.recordHealth("bundle-fetch-failure");
     expect(client.sendPerformance(summary)).toBe(true);
 
     const blob = sender.mock.calls[0]?.[1];
-    expect(JSON.parse((await blob?.text()) ?? "{}")).toEqual({ type: "performance", ...summary });
+    expect(JSON.parse((await blob?.text()) ?? "{}")).toEqual({
+      type: "performance",
+      ...summary,
+      cacheHits: 1,
+      cacheMisses: 1,
+      workerCrashes: 1,
+      bundleFetchFailures: 1,
+    });
     expect(storage.get("umber:telemetry-enabled")).toBe("true");
   });
 });

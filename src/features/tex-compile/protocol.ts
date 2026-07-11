@@ -79,7 +79,11 @@ export type FromEngine =
     }
   | { t: "diagnostics"; epoch: number; items: Diagnostic[] }
   | { t: "pdf"; epoch: number; bytes: ArrayBuffer }
-  | { t: "fatal"; message: string };
+  | { t: "fatal"; message: string; kind?: "engine" | "worker" }
+  | {
+      t: "telemetry";
+      metric: "cache-hit" | "cache-miss" | "bundle-fetch-failure";
+    };
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -207,7 +211,16 @@ export function decodeFromEngine(value: unknown): FromEngine | null {
         ? (value as FromEngine)
         : null;
     case "fatal":
-      return isString(value.message) ? (value as FromEngine) : null;
+      return isString(value.message) &&
+        (value.kind === undefined || value.kind === "engine" || value.kind === "worker")
+        ? (value as FromEngine)
+        : null;
+    case "telemetry":
+      return value.metric === "cache-hit" ||
+        value.metric === "cache-miss" ||
+        value.metric === "bundle-fetch-failure"
+        ? (value as FromEngine)
+        : null;
     default:
       return null;
   }

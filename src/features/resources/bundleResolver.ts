@@ -13,7 +13,10 @@ export type BundleResolverOptions = {
   baseUrl: string;
   cache: ResourceCache;
   fetcher?: typeof fetch;
+  onMetric?: (metric: BundleResolverMetric) => void;
 };
+
+export type BundleResolverMetric = "cache-hit" | "cache-miss" | "bundle-fetch-failure";
 
 const hexHash = /^[a-f0-9]{64}$/;
 
@@ -53,6 +56,7 @@ export class BundleResolver {
   readonly #baseUrl: string;
   readonly #cache: ResourceCache;
   readonly #fetcher: typeof fetch;
+  readonly #onMetric?: (metric: BundleResolverMetric) => void;
   readonly #inflight = new Map<string, Promise<ArrayBuffer>>();
   #manifest?: BundleManifest;
   #manifestRequest?: Promise<BundleManifest>;
@@ -62,6 +66,7 @@ export class BundleResolver {
     this.#baseUrl = options.baseUrl.replace(/\/$/, "");
     this.#cache = options.cache;
     this.#fetcher = options.fetcher ?? fetch;
+    this.#onMetric = options.onMetric;
     this.#cache.pin(this.#manifestKey());
   }
 
@@ -83,7 +88,11 @@ export class BundleResolver {
   async getFile(hash: string): Promise<ArrayBuffer> {
     if (!hexHash.test(hash)) throw new Error(`Invalid resource hash: ${hash}`);
     const cached = await this.#cache.get(hash);
-    if (cached) return cached;
+    if (cached) {
+      this.#onMetric?.("cache-hit");
+      return cached;
+    }
+    this.#onMetric?.("cache-miss");
 
     const current = this.#inflight.get(hash);
     if (current) return (await current).slice(0);
@@ -101,17 +110,22 @@ export class BundleResolver {
   }
 
   async #fetchAndCache(hash: string): Promise<ArrayBuffer> {
-    const response = await this.#fetcher(`${this.#baseUrl}/f/${hash}`);
-    if (!response.ok) throw new Error(`Bundle resource request failed: ${response.status}`);
-    const bytes = await response.arrayBuffer();
-    const actualHash = await sha256Hex(bytes);
-    if (actualHash !== hash) {
-      throw new Error(
-        `Bundle resource integrity failure: expected ${hash}, received ${actualHash}`,
-      );
+    try {
+      const response = await this.#fetcher(`${this.#baseUrl}/f/${hash}`);
+      if (!response.ok) throw new Error(`Bundle resource request failed: ${response.status}`);
+      const bytes = await response.arrayBuffer();
+      const actualHash = await sha256Hex(bytes);
+      if (actualHash !== hash) {
+        throw new Error(
+          `Bundle resource integrity failure: expected ${hash}, received ${actualHash}`,
+        );
+      }
+      await this.#cache.put(hash, bytes);
+      return bytes;
+    } catch (error) {
+      this.#onMetric?.("bundle-fetch-failure");
+      throw error;
     }
-    await this.#cache.put(hash, bytes);
-    return bytes;
   }
 
   async #fetchManifest(): Promise<BundleManifest> {
@@ -123,16 +137,21 @@ export class BundleResolver {
         // A corrupt cached manifest is replaced by the authoritative digest-named CDN object.
       }
     }
-    const response = await this.#fetcher(
-      `${this.#baseUrl}/manifest-${encodeURIComponent(this.#bundleDigest)}.json`,
-    );
-    if (!response.ok) throw new Error(`Bundle manifest request failed: ${response.status}`);
-    const manifest = decodeManifest(await response.json());
-    await this.#cache.put(
-      this.#manifestKey(),
-      new TextEncoder().encode(JSON.stringify(manifest)).buffer,
-    );
-    return manifest;
+    try {
+      const response = await this.#fetcher(
+        `${this.#baseUrl}/manifest-${encodeURIComponent(this.#bundleDigest)}.json`,
+      );
+      if (!response.ok) throw new Error(`Bundle manifest request failed: ${response.status}`);
+      const manifest = decodeManifest(await response.json());
+      await this.#cache.put(
+        this.#manifestKey(),
+        new TextEncoder().encode(JSON.stringify(manifest)).buffer,
+      );
+      return manifest;
+    } catch (error) {
+      this.#onMetric?.("bundle-fetch-failure");
+      throw error;
+    }
   }
 
   #manifestKey(): string {

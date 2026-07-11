@@ -18,6 +18,7 @@ Productionize the immutable TeX bundle pipeline and static hosting configuration
 - [x] Pass TypeScript, Rust, unit, build, and Chromium verification gates
 - [ ] Validate the real engine, mirrored bundle, default font preload, and performance budgets
 - [x] Accept a TeX Live snapshot tarball directly and prove it matches directory input
+- [x] Include cache hit/miss, hard worker crash, and bundle fetch failure counters in telemetry
 
 ## Acceptance Evidence
 - Two builds of one fixture produce byte-identical manifests/digests and deduplicated objects.
@@ -28,4 +29,4 @@ Productionize the immutable TeX bundle pipeline and static hosting configuration
 - Live-engine audit proves warm paragraph-edit p50 ≤50 ms, p95 ≤150 ms and cold compile ≤5 s.
 
 ## Status
-**Integration-ready after tarball remediation; live launch audit pending** — Tar and directory inputs are deterministic and traversal-safe. External live-engine/font/performance gates remain.
+**Implementation complete; live launch audit pending** — Aggregate latency and health telemetry are connected and verified. Real-engine, mirrored-bundle, font, and performance validation still require the external launch inputs listed in the notes.

@@ -16,11 +16,13 @@ describe("BundleResolver", () => {
       return new Response(resource);
     }) as typeof fetch;
     const cache = new MemoryResourceCache();
+    const onMetric = vi.fn();
     const resolver = new BundleResolver({
       bundleDigest: "digest",
       baseUrl: "https://bundle.example/",
       cache,
       fetcher,
+      onMetric,
     });
 
     expect(await resolver.resolve("article.cls")).toBe(hash);
@@ -32,20 +34,45 @@ describe("BundleResolver", () => {
     expect(new TextDecoder().decode(second)).toBe("hello bundle");
     expect(new TextDecoder().decode(third)).toBe("hello bundle");
     expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(onMetric.mock.calls.map(([metric]) => metric)).toEqual([
+      "cache-miss",
+      "cache-miss",
+      "cache-hit",
+    ]);
   });
 
   it("rejects integrity failures without populating the cache", async () => {
     const expectedHash = await sha256Hex(bytes("expected"));
     const cache = new MemoryResourceCache();
+    const onMetric = vi.fn();
     const resolver = new BundleResolver({
       bundleDigest: "digest",
       baseUrl: "https://bundle.example",
       cache,
       fetcher: vi.fn(async () => new Response(bytes("tampered"))) as typeof fetch,
+      onMetric,
     });
 
     await expect(resolver.getFile(expectedHash)).rejects.toThrow("integrity failure");
     expect(await cache.has(expectedHash)).toBe(false);
+    expect(onMetric.mock.calls.map(([metric]) => metric)).toEqual([
+      "cache-miss",
+      "bundle-fetch-failure",
+    ]);
+  });
+
+  it("counts manifest request failures as bundle fetch failures", async () => {
+    const onMetric = vi.fn();
+    const resolver = new BundleResolver({
+      bundleDigest: "digest",
+      baseUrl: "https://bundle.example",
+      cache: new MemoryResourceCache(),
+      fetcher: vi.fn(async () => new Response(null, { status: 503 })) as typeof fetch,
+      onMetric,
+    });
+
+    await expect(resolver.resolve("article.cls")).rejects.toThrow("503");
+    expect(onMetric).toHaveBeenCalledWith("bundle-fetch-failure");
   });
 
   it("prefetches every resolvable source dependency", async () => {

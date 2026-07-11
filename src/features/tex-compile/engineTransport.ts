@@ -244,7 +244,7 @@ export class RestartableEngineTransport implements EngineTransport {
 
   readonly #forwardError: EngineErrorListener = (event) => {
     for (const listener of this.#errorListeners) listener(event);
-    const fatal = { t: "fatal", message: event.message } satisfies FromEngine;
+    const fatal = { t: "fatal", message: event.message, kind: "worker" } satisfies FromEngine;
     for (const listener of this.#listeners) listener({ data: fatal });
     this.#restart();
   };

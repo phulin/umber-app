@@ -12,6 +12,20 @@ describe("engine protocol boundary", () => {
     expect(decodeToEngine({ t: "futureCommand", enabled: true })).toBeNull();
   });
 
+  it("accepts aggregate telemetry and typed worker failures", () => {
+    expect(decodeFromEngine({ t: "telemetry", metric: "cache-hit" })).toEqual({
+      t: "telemetry",
+      metric: "cache-hit",
+    });
+    expect(decodeFromEngine({ t: "fatal", message: "worker stopped", kind: "worker" })).toEqual({
+      t: "fatal",
+      message: "worker stopped",
+      kind: "worker",
+    });
+    expect(decodeFromEngine({ t: "telemetry", metric: "document-content" })).toBeNull();
+    expect(decodeFromEngine({ t: "fatal", message: "stopped", kind: "network" })).toBeNull();
+  });
+
   it("rejects malformed known messages", () => {
     expect(
       decodeFromEngine({
