@@ -21,6 +21,7 @@ Provide one verified content-addressed resource path for the main thread and eng
 - [x] Coordinate main-thread and worker content/metadata mutations with shared locks
 - [x] Add cross-instance evidence that the 1 GB cap cannot be bypassed by stale metadata
 - [x] Restart and reload the project after an actual Worker error event, not only protocol `fatal`
+- [x] Replay the latest edited project bytes after restart, not the original open snapshot
 
 ## Acceptance Evidence
 - Tests prove cache hits avoid fetch and concurrent misses share one request.
@@ -31,4 +32,4 @@ Provide one verified content-addressed resource path for the main thread and eng
 - `npm run check`, `npm run test`, `npm run build`, and `npm run test:e2e` pass.
 
 ## Status
-**Integration-ready after lifecycle remediation; external validation pending** — Protocol fatals and hard Worker errors both notify, restart, and replay project bootstrap state.
+**Integration-ready after current-state replay remediation; external validation pending** — Restart shadow state tracks edit/add/remove messages and replays current bytes.

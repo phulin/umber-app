@@ -36,3 +36,5 @@
 - Cross-instance tests write through two independent caches, evict under a 5-byte cap while pinning the manifest, reconstruct a third instance, and prove the persisted totals and lock names remain correct.
 - A later lifecycle audit found `RestartableEngineTransport` listened only for decoded `fatal` messages. Browser Worker `error` events had no transport channel, so a hard WASM/worker crash could bypass recovery.
 - Resolution: add an explicit transport error channel; `WorkerEngineTransport` forwards browser `ErrorEvent`, while `RestartableEngineTransport` emits a synthetic protocol fatal, restarts, and replays cloned bootstrap buffers.
+- Follow-up audit: the replayed `openProject` message remained the original snapshot. Recovery after user edits could compile stale source, violating the automatic full-recompile requirement.
+- Resolution: update a byte-exact retained project shadow before transfer for every edit/file-add/file-remove. The panic-recovery test edits `source` to `updated` and proves the fresh worker receives `updated` in its replayed `openProject`.

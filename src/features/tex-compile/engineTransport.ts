@@ -144,6 +144,39 @@ const cloneMessage = (message: ToEngine): ToEngine => {
   return message;
 };
 
+const applyProjectMessage = (
+  project: Extract<ToEngine, { t: "openProject" }>,
+  message: ToEngine,
+): void => {
+  if (message.t === "edit") {
+    const file = project.files.find(({ docId }) => docId === message.docId);
+    if (!file) return;
+    const current = new Uint8Array(file.bytes);
+    const insert = new Uint8Array(message.insert);
+    if (message.fromByte > message.toByte || message.toByte > current.byteLength) return;
+    const next = new Uint8Array(
+      message.fromByte + insert.byteLength + current.byteLength - message.toByte,
+    );
+    next.set(current.subarray(0, message.fromByte));
+    next.set(insert, message.fromByte);
+    next.set(current.subarray(message.toByte), message.fromByte + insert.byteLength);
+    file.bytes = next.buffer;
+  }
+  if (message.t === "fileAdd") {
+    const file = {
+      docId: message.docId,
+      path: message.path,
+      bytes: message.bytes.slice(0),
+    };
+    const index = project.files.findIndex(({ docId }) => docId === message.docId);
+    if (index >= 0) project.files[index] = file;
+    else project.files.push(file);
+  }
+  if (message.t === "fileRemove") {
+    project.files = project.files.filter(({ docId }) => docId !== message.docId);
+  }
+};
+
 /** Restarts a failed worker and replays the session bootstrap without retaining detached buffers. */
 export class RestartableEngineTransport implements EngineTransport {
   readonly #factory: () => EngineTransport;
@@ -170,6 +203,7 @@ export class RestartableEngineTransport implements EngineTransport {
     if (this.#terminated) return;
     if (message.t === "init") this.#init = cloneMessage(message) as typeof message;
     if (message.t === "openProject") this.#project = cloneMessage(message) as typeof message;
+    else if (this.#project) applyProjectMessage(this.#project, message);
     this.#transport.postMessage(message, transfer);
   }
 

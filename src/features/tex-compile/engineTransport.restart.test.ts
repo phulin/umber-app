@@ -17,16 +17,29 @@ describe("RestartableEngineTransport", () => {
       entry: "main.tex",
       files: [{ docId: "main", path: "main.tex", bytes: projectBytes }],
     });
+    restartable.postMessage({
+      t: "edit",
+      epoch: 1,
+      docId: "main",
+      fromByte: 0,
+      toByte: 6,
+      insert: new TextEncoder().encode("updated").buffer,
+    });
     transports[0]?.emit({ t: "fatal", message: "wasm panic" });
 
     expect(restartable.restartCount).toBe(1);
     expect(transports).toHaveLength(2);
-    expect(transports[0]?.received.map(({ t }) => t)).toEqual(["init", "openProject"]);
+    expect(transports[0]?.received.map(({ t }) => t)).toEqual(["init", "openProject", "edit"]);
     expect(transports[1]?.received.map(({ t }) => t)).toEqual(["init", "openProject"]);
     const replayed = transports[1]?.received[1];
     expect(replayed?.t === "openProject" ? replayed.files[0]?.bytes : undefined).not.toBe(
       projectBytes,
     );
+    expect(
+      replayed?.t === "openProject"
+        ? new TextDecoder().decode(replayed.files[0]?.bytes)
+        : undefined,
+    ).toBe("updated");
     restartable.terminate();
   });
 
