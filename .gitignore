@@ -1,5 +1,7 @@
 task_plan.md
 notes.md
+!planning/**/task_plan.md
+!planning/**/notes.md
 
 node_modules/
 dist/
