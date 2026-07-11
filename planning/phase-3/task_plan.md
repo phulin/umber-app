@@ -20,6 +20,7 @@ Provide one verified content-addressed resource path for the main thread and eng
 - [x] Persist worker sync-cache LRU metadata across reloads
 - [x] Coordinate main-thread and worker content/metadata mutations with shared locks
 - [x] Add cross-instance evidence that the 1 GB cap cannot be bypassed by stale metadata
+- [x] Restart and reload the project after an actual Worker error event, not only protocol `fatal`
 
 ## Acceptance Evidence
 - Tests prove cache hits avoid fetch and concurrent misses share one request.
@@ -30,4 +31,4 @@ Provide one verified content-addressed resource path for the main thread and eng
 - `npm run check`, `npm run test`, `npm run build`, and `npm run test:e2e` pass.
 
 ## Status
-**Integration-ready after cache remediation; external validation pending** — Shared persistent metadata and lock ordering are verified across async/sync instances. Live engine/bundle validation remains unavailable.
+**Integration-ready after lifecycle remediation; external validation pending** — Protocol fatals and hard Worker errors both notify, restart, and replay project bootstrap state.

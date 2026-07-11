@@ -34,3 +34,5 @@
 - Remediation requires one shared metadata lock per bundle, hash locks nested in a consistent order, fresh metadata reads inside the lock, and persisted worker access updates.
 - Resolution: `OpfsCacheCoordinator` owns fresh `meta.json` reads/writes, a bundle metadata lock, nested hash locks, and eviction. Both async and sync caches use it and no longer retain private metadata snapshots.
 - Cross-instance tests write through two independent caches, evict under a 5-byte cap while pinning the manifest, reconstruct a third instance, and prove the persisted totals and lock names remain correct.
+- A later lifecycle audit found `RestartableEngineTransport` listened only for decoded `fatal` messages. Browser Worker `error` events had no transport channel, so a hard WASM/worker crash could bypass recovery.
+- Resolution: add an explicit transport error channel; `WorkerEngineTransport` forwards browser `ErrorEvent`, while `RestartableEngineTransport` emits a synthetic protocol fatal, restarts, and replays cloned bootstrap buffers.

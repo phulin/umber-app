@@ -29,4 +29,28 @@ describe("RestartableEngineTransport", () => {
     );
     restartable.terminate();
   });
+
+  it("turns a hard worker error into a visible fatal and automatic reload", () => {
+    const transports: FakeEngineTransport[] = [];
+    const restartable = new RestartableEngineTransport(() => {
+      const transport = new FakeEngineTransport();
+      transports.push(transport);
+      return transport;
+    });
+    const messages: unknown[] = [];
+    restartable.addEventListener("message", ({ data }) => messages.push(data));
+    restartable.postMessage({ t: "init", bundleDigest: "bundle", engineOpts: {} });
+    restartable.postMessage({
+      t: "openProject",
+      entry: "main.tex",
+      files: [{ docId: "main", path: "main.tex", bytes: new ArrayBuffer(1) }],
+    });
+
+    transports[0]?.emitError(new Error("worker terminated"));
+
+    expect(messages).toContainEqual({ t: "fatal", message: "worker terminated" });
+    expect(restartable.restartCount).toBe(1);
+    expect(transports[1]?.received.map(({ t }) => t)).toEqual(["init", "openProject"]);
+    restartable.terminate();
+  });
 });

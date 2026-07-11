@@ -2,11 +2,15 @@ import { decodeFromEngine, type FromEngine, type ToEngine } from "./protocol";
 
 export type EngineMessageEvent = { data: unknown };
 export type EngineMessageListener = (event: EngineMessageEvent) => void;
+export type EngineErrorEvent = { message: string; error?: unknown };
+export type EngineErrorListener = (event: EngineErrorEvent) => void;
 
 export interface EngineTransport {
   postMessage(message: ToEngine, transfer?: Transferable[]): void;
   addEventListener(type: "message", listener: EngineMessageListener): void;
   removeEventListener(type: "message", listener: EngineMessageListener): void;
+  addErrorListener(listener: EngineErrorListener): void;
+  removeErrorListener(listener: EngineErrorListener): void;
   terminate(): void;
 }
 
@@ -19,6 +23,7 @@ export type FakeEngineStep = {
 export class FakeEngineTransport implements EngineTransport {
   readonly received: ToEngine[] = [];
   readonly #listeners = new Set<EngineMessageListener>();
+  readonly #errorListeners = new Set<EngineErrorListener>();
   readonly #steps: FakeEngineStep[];
   #terminated = false;
 
@@ -50,20 +55,36 @@ export class FakeEngineTransport implements EngineTransport {
     this.#listeners.delete(listener);
   }
 
+  addErrorListener(listener: EngineErrorListener): void {
+    this.#errorListeners.add(listener);
+  }
+
+  removeErrorListener(listener: EngineErrorListener): void {
+    this.#errorListeners.delete(listener);
+  }
+
   terminate(): void {
     this.#terminated = true;
     this.#listeners.clear();
+    this.#errorListeners.clear();
   }
 
   emit(message: unknown): void {
     if (this.#terminated) return;
     for (const listener of this.#listeners) listener({ data: message });
   }
+
+  emitError(error: unknown): void {
+    if (this.#terminated) return;
+    const message = error instanceof Error ? error.message : String(error);
+    for (const listener of this.#errorListeners) listener({ message, error });
+  }
 }
 
 export class WorkerEngineTransport implements EngineTransport {
   readonly #worker: Worker;
   readonly #listenerMap = new Map<EngineMessageListener, EventListener>();
+  readonly #errorListenerMap = new Map<EngineErrorListener, EventListener>();
 
   constructor(worker: Worker) {
     this.#worker = worker;
@@ -85,9 +106,25 @@ export class WorkerEngineTransport implements EngineTransport {
     this.#listenerMap.delete(listener);
   }
 
+  addErrorListener(listener: EngineErrorListener): void {
+    const wrapped: EventListener = (event) => {
+      const errorEvent = event as ErrorEvent;
+      listener({ message: errorEvent.message || "Engine worker crashed", error: errorEvent.error });
+    };
+    this.#errorListenerMap.set(listener, wrapped);
+    this.#worker.addEventListener("error", wrapped);
+  }
+
+  removeErrorListener(listener: EngineErrorListener): void {
+    const wrapped = this.#errorListenerMap.get(listener);
+    if (wrapped) this.#worker.removeEventListener("error", wrapped);
+    this.#errorListenerMap.delete(listener);
+  }
+
   terminate(): void {
     this.#worker.terminate();
     this.#listenerMap.clear();
+    this.#errorListenerMap.clear();
   }
 }
 
@@ -111,6 +148,7 @@ const cloneMessage = (message: ToEngine): ToEngine => {
 export class RestartableEngineTransport implements EngineTransport {
   readonly #factory: () => EngineTransport;
   readonly #listeners = new Set<EngineMessageListener>();
+  readonly #errorListeners = new Set<EngineErrorListener>();
   #transport: EngineTransport;
   #init?: Extract<ToEngine, { t: "init" }>;
   #project?: Extract<ToEngine, { t: "openProject" }>;
@@ -121,6 +159,7 @@ export class RestartableEngineTransport implements EngineTransport {
     this.#factory = factory;
     this.#transport = factory();
     this.#transport.addEventListener("message", this.#forward);
+    this.#transport.addErrorListener(this.#forwardError);
   }
 
   get restartCount(): number {
@@ -142,11 +181,21 @@ export class RestartableEngineTransport implements EngineTransport {
     this.#listeners.delete(listener);
   }
 
+  addErrorListener(listener: EngineErrorListener): void {
+    this.#errorListeners.add(listener);
+  }
+
+  removeErrorListener(listener: EngineErrorListener): void {
+    this.#errorListeners.delete(listener);
+  }
+
   terminate(): void {
     this.#terminated = true;
     this.#transport.removeEventListener("message", this.#forward);
+    this.#transport.removeErrorListener(this.#forwardError);
     this.#transport.terminate();
     this.#listeners.clear();
+    this.#errorListeners.clear();
   }
 
   readonly #forward: EngineMessageListener = (event) => {
@@ -155,12 +204,21 @@ export class RestartableEngineTransport implements EngineTransport {
     if (message?.t === "fatal") this.#restart();
   };
 
+  readonly #forwardError: EngineErrorListener = (event) => {
+    for (const listener of this.#errorListeners) listener(event);
+    const fatal = { t: "fatal", message: event.message } satisfies FromEngine;
+    for (const listener of this.#listeners) listener({ data: fatal });
+    this.#restart();
+  };
+
   #restart(): void {
     if (this.#terminated) return;
     this.#transport.removeEventListener("message", this.#forward);
+    this.#transport.removeErrorListener(this.#forwardError);
     this.#transport.terminate();
     this.#transport = this.#factory();
     this.#transport.addEventListener("message", this.#forward);
+    this.#transport.addErrorListener(this.#forwardError);
     this.#restartCount += 1;
     if (this.#init) this.#transport.postMessage(cloneMessage(this.#init));
     if (this.#project) this.#transport.postMessage(cloneMessage(this.#project));
