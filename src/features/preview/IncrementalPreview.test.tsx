@@ -1,3 +1,4 @@
+import { createSignal } from "solid-js";
 import { render } from "solid-js/web";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IncrementalPreview, splitPatchForFrames } from "./IncrementalPreview";
@@ -81,5 +82,34 @@ describe("IncrementalPreview", () => {
         .sort(),
     ).toEqual([10, 11, 12]);
     expect(chunks.at(-1)?.final).toBe(true);
+  });
+
+  it("preserves unchanged block DOM while replacing one stable block subtree", async () => {
+    const initial = longDocumentPatch();
+    initial.pages = initial.pages.slice(0, 1);
+    initial.blocks = [
+      { pageId: "page-1", blockId: "one", html: html('<p id="one">One</p>') },
+      { pageId: "page-1", blockId: "two", html: html('<p id="two">Two</p>') },
+    ];
+    const [patch, setPatch] = createSignal<PatchMessage>(initial);
+    const root = document.createElement("div");
+    document.body.append(root);
+    dispose = render(() => <IncrementalPreview patch={patch()} />, root);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const unchanged = root.querySelector('[data-block-id="one"]');
+    const replaced = root.querySelector('[data-block-id="two"]');
+
+    setPatch({
+      ...initial,
+      epoch: 2,
+      pages: [],
+      blocks: [{ pageId: "page-1", blockId: "two", html: html('<p id="two">Updated</p>') }],
+      spans: [],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(root.querySelector('[data-block-id="one"]')).toBe(unchanged);
+    expect(root.querySelector('[data-block-id="two"]')).not.toBe(replaced);
+    expect(root.querySelector('[data-block-id="two"]')?.textContent).toBe("Updated");
   });
 });

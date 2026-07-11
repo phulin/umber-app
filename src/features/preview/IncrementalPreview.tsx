@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import type { SourceSpan } from "../tex-compile/protocol";
-import type { PatchMessage, PreviewPage } from "./previewDocument";
+import type { PatchMessage, PreviewBlock, PreviewPage } from "./previewDocument";
 import { PreviewDocument } from "./previewDocument";
 
 type IncrementalPreviewProps = {
@@ -79,16 +79,24 @@ function cancelFrame(handle: number): void {
   else window.clearTimeout(handle);
 }
 
-function PageBody(props: { page: PreviewPage }) {
+function PreviewBlockBody(props: { block: PreviewBlock }) {
   let element: HTMLDivElement | undefined;
 
   createEffect(() => {
     const detached = document.createElement("div");
-    detached.innerHTML = props.page.blocks.map(({ html }) => html).join("");
+    detached.innerHTML = props.block.html;
     element?.replaceChildren(...detached.childNodes);
   });
 
-  return <div ref={element} class="preview-page-content" />;
+  return <div ref={element} class="preview-block-root" data-block-id={props.block.blockId} />;
+}
+
+function PageBody(props: { page: PreviewPage }) {
+  return (
+    <div class="preview-page-content">
+      <For each={props.page.blocks}>{(block) => <PreviewBlockBody block={block} />}</For>
+    </div>
+  );
 }
 
 export function IncrementalPreview(props: IncrementalPreviewProps) {
@@ -105,6 +113,8 @@ export function IncrementalPreview(props: IncrementalPreviewProps) {
     revision();
     return model.pages;
   });
+  const pageMap = createMemo(() => new Map(pages().map((page) => [page.pageId, page] as const)));
+  const pageIds = createMemo(() => pages().map(({ pageId }) => pageId));
 
   const captureAnchor = (): Anchor | undefined => {
     if (!scroller) return undefined;
@@ -231,26 +241,31 @@ export function IncrementalPreview(props: IncrementalPreviewProps) {
         when={pages().length > 0}
         fallback={<div class="preview-empty">Waiting for a patch…</div>}
       >
-        <For each={pages()}>
-          {(page, index) => {
+        <For each={pageIds()}>
+          {(pageId, index) => {
+            const page = () => pageMap().get(pageId);
             const mounted = () => {
               const range = visibleRange();
               return index() >= range.first && index() <= range.last;
             };
             return (
-              <article
-                class="preview-page-shell"
-                data-page-id={page.pageId}
-                data-page-index={index()}
-                style={{
-                  width: `${ptToPx(page.widthPt)}px`,
-                  height: `${ptToPx(page.heightPt)}px`,
-                }}
-              >
-                <Show when={mounted()}>
-                  <PageBody page={page} />
-                </Show>
-              </article>
+              <Show when={page()}>
+                {(currentPage) => (
+                  <article
+                    class="preview-page-shell"
+                    data-page-id={pageId}
+                    data-page-index={index()}
+                    style={{
+                      width: `${ptToPx(currentPage().widthPt)}px`,
+                      height: `${ptToPx(currentPage().heightPt)}px`,
+                    }}
+                  >
+                    <Show when={mounted()}>
+                      <PageBody page={currentPage()} />
+                    </Show>
+                  </article>
+                )}
+              </Show>
             );
           }}
         </For>

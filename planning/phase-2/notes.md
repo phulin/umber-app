@@ -22,3 +22,5 @@
 - Resolution: split patches larger than 20 affected pages into an epoch/span/removal metadata chunk plus one chunk per page; order viewport pages by distance from viewport center, then offscreen pages.
 - The scheduler applies at least one chunk per animation frame and continues only while measured work remains below 8 ms. DOM revisions and scroll-anchor restoration happen between frame batches.
 - Chromium selection evidence confirms the fake engine's rendered block copies as `Hello, Umber.` in readable order.
+- Follow-up audit: `PageBody` concatenated every block's HTML and called `replaceChildren` on the page content root. This discarded unchanged block nodes instead of applying stable-ID subtree replacement.
+- Resolution: reconcile page components by stable `pageId`, render stable block objects through keyed `For`, and parse/swap HTML inside a `data-block-id` root with `display: contents`. Unit evidence proves an unchanged sibling node is identical before/after while the changed block root is replaced.

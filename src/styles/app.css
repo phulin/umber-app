@@ -327,6 +327,10 @@ h2 {
   inset: 0;
 }
 
+.preview-block-root {
+  display: contents;
+}
+
 .source-sync-highlight {
   outline: 2px solid #ca743c;
   outline-offset: 2px;
