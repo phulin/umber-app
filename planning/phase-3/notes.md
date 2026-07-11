@@ -22,3 +22,8 @@
 - URL or package location for the Rust/WASM module exporting `createIncrementalTexEngine(host)`.
 - Bundle CDN base URL.
 - Immutable bundle digest and matching manifest/resources.
+
+## Local Engine Audit
+- `/Users/phulin/Documents/Projects/umber2/docs/wasm_mvp.md` is marked proposed, describes `umber-wasm` as a new crate, and returns DVI rather than incremental coordinate-identical HTML patches. No `umber-wasm` crate currently exists in its workspace.
+- `/Users/phulin/Documents/Projects/notex/docs/incremental_state.md` describes incremental replay as future work and states that existing behavior remains non-incremental.
+- Both engine repositories are outside this app's scope and have independent user-owned worktree state. Neither can be substituted for the design doc's given engine without materially changing the product contract.

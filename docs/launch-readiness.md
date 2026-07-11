@@ -35,3 +35,13 @@ available in the repository or environment:
 Required environment values are documented in `.env.example` and `README.md`. Until those live
 gates pass, the application is an implementation-complete fake-engine MVP, not a production-ready
 TeX compiler release.
+
+### Local engine evidence
+
+- `../umber2/docs/wasm_mvp.md` is a proposed DVI-returning browser MVP and refers to `umber-wasm`
+  as a new crate that is not present in that workspace.
+- `../notex/docs/incremental_state.md` describes incremental compilation and replay as future work;
+  its documented current behavior remains non-incremental.
+
+Neither local repository implements the accepted app contract of streaming coordinate-identical
+HTML patches, epoch-scoped source spans, and the `createIncrementalTexEngine(host)` adapter export.

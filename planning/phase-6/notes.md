@@ -24,3 +24,4 @@
 - Exact default font artifacts/family mapping from the real engine.
 - HTTPS deployment endpoint for CORS/cache verification.
 - Representative 30-page performance corpus for the live p50/p95, cold compile, memory, and selection audit.
+- A locally discovered `umber2` WASM design is only proposed and DVI-oriented; `notex` incremental replay is also still planned. Neither supplies the required live HTML-patch engine artifact.
