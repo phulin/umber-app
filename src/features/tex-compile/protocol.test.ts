@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { paragraphEditGolden } from "./__fixtures__/paragraph-edit";
-import { decodeFromEngine, type ToEngine, transferablesFor } from "./protocol";
+import { decodeFromEngine, decodeToEngine, type ToEngine, transferablesFor } from "./protocol";
 
 describe("engine protocol boundary", () => {
   it("accepts every message in the paragraph-edit golden stream", () => {
@@ -9,6 +9,7 @@ describe("engine protocol boundary", () => {
 
   it("ignores unknown messages for forward compatibility", () => {
     expect(decodeFromEngine({ t: "engineCapability", name: "future-feature" })).toBeNull();
+    expect(decodeToEngine({ t: "futureCommand", enabled: true })).toBeNull();
   });
 
   it("rejects malformed known messages", () => {
@@ -44,5 +45,28 @@ describe("engine protocol boundary", () => {
     const patch = paragraphEditGolden[2];
     expect(patch?.t).toBe("patch");
     expect(transferablesFor(patch)).toEqual(patch.t === "patch" ? [patch.blocks[0]?.html] : []);
+  });
+
+  it("validates the main-thread side of the protocol", () => {
+    expect(
+      decodeToEngine({
+        t: "edit",
+        epoch: 3,
+        docId: "main",
+        fromByte: 4,
+        toByte: 6,
+        insert: new ArrayBuffer(2),
+      }),
+    ).not.toBeNull();
+    expect(
+      decodeToEngine({
+        t: "edit",
+        epoch: 3,
+        docId: "main",
+        fromByte: 7,
+        toByte: 6,
+        insert: new ArrayBuffer(2),
+      }),
+    ).toBeNull();
   });
 });

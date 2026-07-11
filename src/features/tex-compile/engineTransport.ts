@@ -91,6 +91,82 @@ export class WorkerEngineTransport implements EngineTransport {
   }
 }
 
+export function createWasmWorkerTransport(): WorkerEngineTransport {
+  return new WorkerEngineTransport(
+    new Worker(new URL("../../workers/engine.worker.ts", import.meta.url), { type: "module" }),
+  );
+}
+
+const cloneMessage = (message: ToEngine): ToEngine => {
+  if (message.t === "openProject") {
+    return {
+      ...message,
+      files: message.files.map((file) => ({ ...file, bytes: file.bytes.slice(0) })),
+    };
+  }
+  return message;
+};
+
+/** Restarts a failed worker and replays the session bootstrap without retaining detached buffers. */
+export class RestartableEngineTransport implements EngineTransport {
+  readonly #factory: () => EngineTransport;
+  readonly #listeners = new Set<EngineMessageListener>();
+  #transport: EngineTransport;
+  #init?: Extract<ToEngine, { t: "init" }>;
+  #project?: Extract<ToEngine, { t: "openProject" }>;
+  #terminated = false;
+  #restartCount = 0;
+
+  constructor(factory: () => EngineTransport) {
+    this.#factory = factory;
+    this.#transport = factory();
+    this.#transport.addEventListener("message", this.#forward);
+  }
+
+  get restartCount(): number {
+    return this.#restartCount;
+  }
+
+  postMessage(message: ToEngine, transfer: Transferable[] = []): void {
+    if (this.#terminated) return;
+    if (message.t === "init") this.#init = cloneMessage(message) as typeof message;
+    if (message.t === "openProject") this.#project = cloneMessage(message) as typeof message;
+    this.#transport.postMessage(message, transfer);
+  }
+
+  addEventListener(_type: "message", listener: EngineMessageListener): void {
+    this.#listeners.add(listener);
+  }
+
+  removeEventListener(_type: "message", listener: EngineMessageListener): void {
+    this.#listeners.delete(listener);
+  }
+
+  terminate(): void {
+    this.#terminated = true;
+    this.#transport.removeEventListener("message", this.#forward);
+    this.#transport.terminate();
+    this.#listeners.clear();
+  }
+
+  readonly #forward: EngineMessageListener = (event) => {
+    for (const listener of this.#listeners) listener(event);
+    const message = decodeFromEngine(event.data);
+    if (message?.t === "fatal") this.#restart();
+  };
+
+  #restart(): void {
+    if (this.#terminated) return;
+    this.#transport.removeEventListener("message", this.#forward);
+    this.#transport.terminate();
+    this.#transport = this.#factory();
+    this.#transport.addEventListener("message", this.#forward);
+    this.#restartCount += 1;
+    if (this.#init) this.#transport.postMessage(cloneMessage(this.#init));
+    if (this.#project) this.#transport.postMessage(cloneMessage(this.#project));
+  }
+}
+
 export function listenToEngine(
   transport: EngineTransport,
   listener: (message: FromEngine) => void,

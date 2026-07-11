@@ -1,0 +1,75 @@
+import { BundleResolver } from "../features/resources/bundleResolver";
+import { createResourceCache, type ResourceCache } from "../features/resources/resourceCache";
+import { WorkerSyncResourceCache } from "../features/resources/syncResourceCache";
+import {
+  decodeToEngine,
+  type FromEngine,
+  type ToEngine,
+  transferablesFor,
+} from "../features/tex-compile/protocol";
+import {
+  type IncrementalTexEngine,
+  loadWasmEngine,
+} from "../features/tex-compile/wasmEngineAdapter";
+
+type WorkerScope = {
+  onmessage: ((event: MessageEvent<unknown>) => void) | null;
+  postMessage(message: FromEngine, transfer: Transferable[]): void;
+};
+
+type EngineInitOptions = {
+  moduleUrl: string;
+  bundleBaseUrl: string;
+};
+
+const scope = globalThis as unknown as WorkerScope;
+let engine: IncrementalTexEngine | undefined;
+
+const emit = (message: FromEngine) => scope.postMessage(message, transferablesFor(message));
+
+const initOptions = (message: Extract<ToEngine, { t: "init" }>): EngineInitOptions => {
+  const { moduleUrl, bundleBaseUrl } = message.engineOpts;
+  if (typeof moduleUrl !== "string" || typeof bundleBaseUrl !== "string") {
+    throw new Error("Engine init requires moduleUrl and bundleBaseUrl");
+  }
+  return { moduleUrl, bundleBaseUrl };
+};
+
+async function createWorkerCache(bundleDigest: string): Promise<ResourceCache> {
+  try {
+    return await WorkerSyncResourceCache.create(bundleDigest);
+  } catch {
+    return createResourceCache(bundleDigest);
+  }
+}
+
+async function boot(message: Extract<ToEngine, { t: "init" }>): Promise<void> {
+  await engine?.dispose();
+  const options = initOptions(message);
+  const cache = await createWorkerCache(message.bundleDigest);
+  const resolver = new BundleResolver({
+    bundleDigest: message.bundleDigest,
+    baseUrl: options.bundleBaseUrl,
+    cache,
+  });
+  await resolver.init();
+  engine = await loadWasmEngine(options.moduleUrl, resolver, emit);
+  await engine.handle(message);
+}
+
+async function handle(raw: unknown): Promise<void> {
+  const message = decodeToEngine(raw);
+  if (!message) return;
+  if (message.t === "init") {
+    await boot(message);
+    return;
+  }
+  if (!engine) throw new Error("Engine received a command before init");
+  await engine.handle(message);
+}
+
+scope.onmessage = (event) => {
+  handle(event.data).catch((error: unknown) => {
+    emit({ t: "fatal", message: error instanceof Error ? error.message : String(error) });
+  });
+};

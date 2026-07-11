@@ -153,6 +153,12 @@ function isFont(value: unknown) {
   );
 }
 
+function isProjectFile(value: unknown): value is ProjectFile {
+  return (
+    isRecord(value) && isString(value.docId) && isString(value.path) && isArrayBuffer(value.bytes)
+  );
+}
+
 const compilePhases: readonly CompilePhase[] = ["expanding", "typesetting", "fetching", "idle"];
 
 /**
@@ -202,6 +208,43 @@ export function decodeFromEngine(value: unknown): FromEngine | null {
         : null;
     case "fatal":
       return isString(value.message) ? (value as FromEngine) : null;
+    default:
+      return null;
+  }
+}
+
+/** Worker-side runtime boundary. Unknown main-thread messages are ignored for compatibility. */
+export function decodeToEngine(value: unknown): ToEngine | null {
+  if (!isRecord(value) || !isString(value.t)) return null;
+
+  switch (value.t) {
+    case "init":
+      return isString(value.bundleDigest) && isRecord(value.engineOpts)
+        ? (value as ToEngine)
+        : null;
+    case "openProject":
+      return Array.isArray(value.files) && value.files.every(isProjectFile) && isString(value.entry)
+        ? (value as ToEngine)
+        : null;
+    case "edit":
+      return isNonNegativeInteger(value.epoch) &&
+        isString(value.docId) &&
+        isNonNegativeInteger(value.fromByte) &&
+        isNonNegativeInteger(value.toByte) &&
+        value.toByte >= value.fromByte &&
+        isArrayBuffer(value.insert)
+        ? (value as ToEngine)
+        : null;
+    case "cancel":
+      return isNonNegativeInteger(value.beforeEpoch) ? (value as ToEngine) : null;
+    case "fileAdd":
+      return isString(value.docId) && isString(value.path) && isArrayBuffer(value.bytes)
+        ? (value as ToEngine)
+        : null;
+    case "fileRemove":
+      return isString(value.docId) ? (value as ToEngine) : null;
+    case "exportPdf":
+      return isNonNegativeInteger(value.epoch) ? (value as ToEngine) : null;
     default:
       return null;
   }
