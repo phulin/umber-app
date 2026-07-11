@@ -17,3 +17,8 @@
 - `npm run test`: 15 files and 34 tests passed.
 - `npm run build`: strict TypeScript and Vite worker/app build passed.
 - `npm run test:e2e`: 2 Chromium tests passed, covering diagnostics, both sync directions, and independent multi-file editor persistence.
+
+## Completion Audit Reopen
+- `CompileSession.edit()` owned epoch increments, so edits withheld during saturation did not advance the epoch until one coalesced message was sent. This conflated user-edit sequencing with transport-message count.
+- The corrected design assigns an epoch at `CompileOrchestrator.submitEdit`, records the latest pending epoch per document, and lets `CompileSession` send an explicitly assigned epoch.
+- Verification queues two saturated edits, proves the orchestrator reaches epoch 2 before any message is sent, then proves the single coalesced `XY` insertion is labeled epoch 2 after idle.

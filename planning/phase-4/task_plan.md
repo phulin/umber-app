@@ -17,6 +17,8 @@ Complete the interactive editing loop with byte-accurate incremental deltas, mul
 - [x] Implement editor cursor → preview scroll/highlight forward sync
 - [x] Add unit and Chromium tests for Unicode offsets, coalescing, diagnostics, and both sync directions
 - [x] Pass all project verification gates
+- [x] Advance the monotonic epoch for every local edit, including edits queued during saturation
+- [x] Label each coalesced per-document batch with its latest constituent edit epoch
 
 ## Acceptance Evidence
 - Unicode edits prove byte ranges without whole-document re-encoding.
@@ -27,4 +29,4 @@ Complete the interactive editing loop with byte-accurate incremental deltas, mul
 - `npm run check`, `npm run test`, `npm run build`, and `npm run test:e2e` pass.
 
 ## Status
-**Complete** — The interactive editor/compile/diagnostic/sync loop is implemented against the fake engine and fully verified.
+**Complete after epoch remediation** — User-edit epochs are independent of message count, and saturated batches carry the latest constituent epoch.

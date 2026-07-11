@@ -52,12 +52,13 @@ describe("CompileOrchestrator", () => {
     orchestrator.submitEdit(delta(1, 1, "X"));
     orchestrator.submitEdit(delta(2, 2, "Y"));
 
+    expect(orchestrator.editEpoch).toBe(2);
     expect(transport.received).toHaveLength(2);
     transport.emit({ t: "progress", epoch: 0, phase: "idle" });
 
     expect(transport.received.map(({ t }) => t)).toEqual(["init", "openProject", "cancel", "edit"]);
     const edit = transport.received.at(-1);
-    expect(edit).toMatchObject({ t: "edit", fromByte: 1, toByte: 1 });
+    expect(edit).toMatchObject({ t: "edit", epoch: 2, fromByte: 1, toByte: 1 });
     expect(edit?.t === "edit" ? new TextDecoder().decode(edit.insert) : "").toBe("XY");
     orchestrator.dispose();
   });

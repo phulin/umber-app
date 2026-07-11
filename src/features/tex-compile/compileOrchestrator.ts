@@ -9,6 +9,7 @@ type OrchestratorListener = (message: FromEngine) => void;
 type DocumentState = {
   engineText: string;
   localText: string;
+  pendingEpoch?: number;
 };
 
 export class CompileOrchestrator {
@@ -17,6 +18,7 @@ export class CompileOrchestrator {
   readonly #listeners = new Set<OrchestratorListener>();
   readonly #unsubscribe: () => void;
   #saturated = false;
+  #editEpoch = 0;
 
   constructor(transport: EngineTransport) {
     this.#session = new CompileSession(transport);
@@ -24,7 +26,7 @@ export class CompileOrchestrator {
   }
 
   get editEpoch(): number {
-    return this.#session.editEpoch;
+    return this.#editEpoch;
   }
 
   get saturated(): boolean {
@@ -46,6 +48,7 @@ export class CompileOrchestrator {
   }
 
   submitEdit(delta: EditorDelta): void {
+    const epoch = ++this.#editEpoch;
     const document = this.#documents.get(delta.docId);
     if (!document) throw new Error(`Unknown document: ${delta.docId}`);
     const localOffsets = new Utf8OffsetMap(document.localText);
@@ -54,8 +57,11 @@ export class CompileOrchestrator {
     localOffsets.applyChange(fromUtf16, toUtf16, delta.insertedText);
     document.localText = localOffsets.text;
 
-    if (this.#saturated) return;
-    this.#session.edit(delta.docId, delta.fromByte, delta.toByte, delta.insertedText);
+    if (this.#saturated) {
+      document.pendingEpoch = epoch;
+      return;
+    }
+    this.#session.editAtEpoch(epoch, delta.docId, delta.fromByte, delta.toByte, delta.insertedText);
     document.engineText = document.localText;
   }
 
@@ -80,13 +86,26 @@ export class CompileOrchestrator {
   }
 
   #flushPending(): void {
-    for (const [docId, document] of this.#documents) {
-      if (document.engineText === document.localText) continue;
+    const pending = [...this.#documents.entries()]
+      .filter(([, document]) => document.pendingEpoch !== undefined)
+      .sort((left, right) => (left[1].pendingEpoch ?? 0) - (right[1].pendingEpoch ?? 0));
+    for (const [docId, document] of pending) {
+      if (document.engineText === document.localText) {
+        document.pendingEpoch = undefined;
+        continue;
+      }
       const offsets = new Utf8OffsetMap(document.engineText);
       const delta = offsets.replaceWith(document.localText);
       if (!delta) continue;
-      this.#session.edit(docId, delta.fromByte, delta.toByte, delta.insertedText);
+      this.#session.editAtEpoch(
+        document.pendingEpoch ?? this.#editEpoch,
+        docId,
+        delta.fromByte,
+        delta.toByte,
+        delta.insertedText,
+      );
       document.engineText = document.localText;
+      document.pendingEpoch = undefined;
     }
   }
 }

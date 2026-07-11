@@ -39,6 +39,20 @@ export class CompileSession {
 
   edit(docId: string, fromByte: number, toByte: number, insertedText: string): number {
     const epoch = ++this.#editEpoch;
+    this.editAtEpoch(epoch, docId, fromByte, toByte, insertedText);
+    return epoch;
+  }
+
+  editAtEpoch(
+    epoch: number,
+    docId: string,
+    fromByte: number,
+    toByte: number,
+    insertedText: string,
+  ): void {
+    if (!Number.isSafeInteger(epoch) || epoch <= 0)
+      throw new RangeError(`Invalid edit epoch: ${epoch}`);
+    this.#editEpoch = Math.max(this.#editEpoch, epoch);
     const cancel: ToEngine = { t: "cancel", beforeEpoch: epoch };
     const edit: EditMessage = {
       t: "edit",
@@ -50,7 +64,6 @@ export class CompileSession {
     };
     this.send(cancel);
     this.send(edit);
-    return epoch;
   }
 
   subscribe(listener: SessionListener): () => void {
