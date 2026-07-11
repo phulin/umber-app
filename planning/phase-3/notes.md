@@ -27,3 +27,10 @@
 - `/Users/phulin/Documents/Projects/umber2/docs/wasm_mvp.md` is marked proposed, describes `umber-wasm` as a new crate, and returns DVI rather than incremental coordinate-identical HTML patches. No `umber-wasm` crate currently exists in its workspace.
 - `/Users/phulin/Documents/Projects/notex/docs/incremental_state.md` describes incremental replay as future work and states that existing behavior remains non-incremental.
 - Both engine repositories are outside this app's scope and have independent user-owned worktree state. Neither can be substituted for the design doc's given engine without materially changing the product contract.
+
+## Completion Audit Reopen
+- `WorkerSyncResourceCache` used sync access handles but kept sizes/access order only in memory, so a reload could ignore existing bytes when enforcing the 1 GB cap.
+- `OpfsResourceCache` cached `meta.json` per instance and locked content by hash, allowing main-thread and worker instances to overwrite newer metadata with stale copies.
+- Remediation requires one shared metadata lock per bundle, hash locks nested in a consistent order, fresh metadata reads inside the lock, and persisted worker access updates.
+- Resolution: `OpfsCacheCoordinator` owns fresh `meta.json` reads/writes, a bundle metadata lock, nested hash locks, and eviction. Both async and sync caches use it and no longer retain private metadata snapshots.
+- Cross-instance tests write through two independent caches, evict under a 5-byte cap while pinning the manifest, reconstruct a third instance, and prove the persisted totals and lock names remain correct.

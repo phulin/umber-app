@@ -1,3 +1,5 @@
+import { type CacheLockManager, isNotFound, OpfsCacheCoordinator } from "./opfsCacheCoordinator";
+
 export type CacheStats = {
   entries: number;
   totalBytes: number;
@@ -12,10 +14,8 @@ export interface ResourceCache {
   stats(): Promise<CacheStats>;
 }
 
-type CacheEntry = {
-  bytes: ArrayBuffer;
-  lastAccess: number;
-};
+type CacheEntry = { bytes: ArrayBuffer; lastAccess: number };
+const validSegment = /^[a-zA-Z0-9._-]+$/;
 
 export class MemoryResourceCache implements ResourceCache {
   readonly #entries = new Map<string, CacheEntry>();
@@ -56,9 +56,7 @@ export class MemoryResourceCache implements ResourceCache {
   }
 
   #totalBytes(): number {
-    let total = 0;
-    for (const { bytes } of this.#entries.values()) total += bytes.byteLength;
-    return total;
+    return [...this.#entries.values()].reduce((total, entry) => total + entry.bytes.byteLength, 0);
   }
 
   #evict(): void {
@@ -72,85 +70,87 @@ export class MemoryResourceCache implements ResourceCache {
   }
 }
 
-type StoredMeta = {
-  entries: Record<string, { size: number; lastAccess: number }>;
-  clock: number;
-};
-
-type LockManagerLike = {
-  request<T>(name: string, callback: () => Promise<T>): Promise<T>;
-};
-
-const validSegment = /^[a-zA-Z0-9._-]+$/;
-
 export class OpfsResourceCache implements ResourceCache {
   readonly #directory: FileSystemDirectoryHandle;
   readonly #maxBytes: number;
-  readonly #locks?: LockManagerLike;
   readonly #pinned = new Set<string>();
-  #meta?: StoredMeta;
+  readonly #coordinator: OpfsCacheCoordinator;
 
   private constructor(
     directory: FileSystemDirectoryHandle,
+    namespace: string,
     maxBytes: number,
-    locks?: LockManagerLike,
+    locks?: CacheLockManager,
   ) {
     this.#directory = directory;
     this.#maxBytes = maxBytes;
-    this.#locks = locks;
+    this.#coordinator = new OpfsCacheCoordinator(directory, namespace, locks);
   }
 
   static async create(
     bundleDigest: string,
-    options: { maxBytes?: number; root?: FileSystemDirectoryHandle; locks?: LockManagerLike } = {},
+    options: {
+      maxBytes?: number;
+      root?: FileSystemDirectoryHandle;
+      locks?: CacheLockManager;
+    } = {},
   ): Promise<OpfsResourceCache> {
     if (!validSegment.test(bundleDigest)) throw new Error("Invalid bundle digest");
     const root = options.root ?? (await navigator.storage.getDirectory());
     const cacheRoot = await root.getDirectoryHandle("cache", { create: true });
     const directory = await cacheRoot.getDirectoryHandle(bundleDigest, { create: true });
-    const locks = options.locks ?? (navigator.locks as unknown as LockManagerLike | undefined);
-    return new OpfsResourceCache(directory, options.maxBytes ?? 1024 ** 3, locks);
+    const locks = options.locks ?? (navigator.locks as unknown as CacheLockManager | undefined);
+    return new OpfsResourceCache(directory, bundleDigest, options.maxBytes ?? 1024 ** 3, locks);
   }
 
   async get(key: string): Promise<ArrayBuffer | null> {
     this.#assertKey(key);
-    try {
-      const handle = await this.#directory.getFileHandle(key);
-      const bytes = await (await handle.getFile()).arrayBuffer();
-      const meta = await this.#metadata();
-      const entry = meta.entries[key];
-      if (entry) entry.lastAccess = ++meta.clock;
-      await this.#writeMetadata();
-      return bytes;
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "NotFoundError") return null;
-      throw error;
-    }
+    return this.#coordinator.mutateMetadata((metadata) =>
+      this.#coordinator.withKeyLock(key, async () => {
+        try {
+          const handle = await this.#directory.getFileHandle(key);
+          const bytes = await (await handle.getFile()).arrayBuffer();
+          metadata.entries[key] = {
+            size: bytes.byteLength,
+            lastAccess: ++metadata.clock,
+          };
+          return bytes;
+        } catch (error) {
+          if (isNotFound(error)) {
+            delete metadata.entries[key];
+            return null;
+          }
+          throw error;
+        }
+      }),
+    );
   }
 
   async put(key: string, bytes: ArrayBuffer): Promise<void> {
     this.#assertKey(key);
-    await this.#withLock(key, async () => {
-      const handle = await this.#directory.getFileHandle(key, { create: true });
-      const writable = await handle.createWritable();
-      await writable.write(bytes);
-      await writable.close();
-      const meta = await this.#metadata();
-      meta.entries[key] = { size: bytes.byteLength, lastAccess: ++meta.clock };
-      await this.#evict();
-      await this.#writeMetadata();
+    await this.#coordinator.mutateMetadata(async (metadata) => {
+      await this.#coordinator.withKeyLock(key, async () => {
+        const handle = await this.#directory.getFileHandle(key, { create: true });
+        const writable = await handle.createWritable();
+        await writable.write(bytes);
+        await writable.close();
+      });
+      metadata.entries[key] = { size: bytes.byteLength, lastAccess: ++metadata.clock };
+      await this.#coordinator.evictToLimit(metadata, this.#maxBytes, this.#pinned);
     });
   }
 
   async has(key: string): Promise<boolean> {
     this.#assertKey(key);
-    try {
-      await this.#directory.getFileHandle(key);
-      return true;
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "NotFoundError") return false;
-      throw error;
-    }
+    return this.#coordinator.withKeyLock(key, async () => {
+      try {
+        await this.#directory.getFileHandle(key);
+        return true;
+      } catch (error) {
+        if (isNotFound(error)) return false;
+        throw error;
+      }
+    });
   }
 
   pin(key: string): void {
@@ -159,51 +159,12 @@ export class OpfsResourceCache implements ResourceCache {
   }
 
   async stats(): Promise<CacheStats> {
-    const meta = await this.#metadata();
+    const metadata = await this.#coordinator.readMetadata();
     return {
-      entries: Object.keys(meta.entries).length,
-      totalBytes: Object.values(meta.entries).reduce((total, entry) => total + entry.size, 0),
+      entries: Object.keys(metadata.entries).length,
+      totalBytes: Object.values(metadata.entries).reduce((total, entry) => total + entry.size, 0),
       maxBytes: this.#maxBytes,
     };
-  }
-
-  async #metadata(): Promise<StoredMeta> {
-    if (this.#meta) return this.#meta;
-    try {
-      const handle = await this.#directory.getFileHandle("meta.json");
-      const parsed = JSON.parse(await (await handle.getFile()).text()) as StoredMeta;
-      this.#meta = parsed;
-    } catch (error) {
-      if (!(error instanceof DOMException) || error.name !== "NotFoundError") throw error;
-      this.#meta = { entries: {}, clock: 0 };
-    }
-    return this.#meta;
-  }
-
-  async #writeMetadata(): Promise<void> {
-    if (!this.#meta) return;
-    const handle = await this.#directory.getFileHandle("meta.json", { create: true });
-    const writable = await handle.createWritable();
-    await writable.write(JSON.stringify(this.#meta));
-    await writable.close();
-  }
-
-  async #evict(): Promise<void> {
-    const meta = await this.#metadata();
-    const total = () => Object.values(meta.entries).reduce((sum, entry) => sum + entry.size, 0);
-    while (total() > this.#maxBytes) {
-      const candidate = Object.entries(meta.entries)
-        .filter(([key]) => !this.#pinned.has(key))
-        .sort((left, right) => left[1].lastAccess - right[1].lastAccess)[0];
-      if (!candidate) return;
-      await this.#directory.removeEntry(candidate[0]);
-      delete meta.entries[candidate[0]];
-    }
-  }
-
-  async #withLock<T>(key: string, callback: () => Promise<T>): Promise<T> {
-    if (!this.#locks) return callback();
-    return this.#locks.request(`umber-cache-${key}`, callback);
   }
 
   #assertKey(key: string): void {
@@ -220,9 +181,7 @@ export async function createResourceCache(
     const storage = navigator.storage as StorageManager & {
       getDirectory?: () => Promise<FileSystemDirectoryHandle>;
     };
-    if (!options.root && !storage.getDirectory) {
-      return new MemoryResourceCache(options.maxBytes);
-    }
+    if (!options.root && !storage.getDirectory) return new MemoryResourceCache(options.maxBytes);
     return await OpfsResourceCache.create(bundleDigest, options);
   } catch (error) {
     console.warn("OPFS cache unavailable; using memory cache for this session.", error);

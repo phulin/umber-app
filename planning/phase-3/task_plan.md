@@ -17,6 +17,9 @@ Provide one verified content-addressed resource path for the main thread and eng
 - [x] Add cache, resolver, integrity, fallback, and adapter tests
 - [x] Pass all project verification gates
 - [ ] Validate against the supplied real engine module and mirrored bundle
+- [x] Persist worker sync-cache LRU metadata across reloads
+- [x] Coordinate main-thread and worker content/metadata mutations with shared locks
+- [x] Add cross-instance evidence that the 1 GB cap cannot be bypassed by stale metadata
 
 ## Acceptance Evidence
 - Tests prove cache hits avoid fetch and concurrent misses share one request.
@@ -27,4 +30,4 @@ Provide one verified content-addressed resource path for the main thread and eng
 - `npm run check`, `npm run test`, `npm run build`, and `npm run test:e2e` pass.
 
 ## Status
-**Integration-ready; external validation pending** — The full browser-side resource and worker adapter path is green. Live validation needs the real engine module URL, bundle base URL, and digest, none of which exist in this repository yet.
+**Integration-ready after cache remediation; external validation pending** — Shared persistent metadata and lock ordering are verified across async/sync instances. Live engine/bundle validation remains unavailable.
