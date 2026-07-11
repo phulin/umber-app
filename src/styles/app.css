@@ -154,6 +154,25 @@ h2 {
   box-shadow: 0 0 0 3px rgb(63 129 122 / 14%);
 }
 
+.recovery-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: -4px 0 16px;
+  padding: 10px 12px;
+  border: 1px solid #d4a664;
+  border-radius: 6px;
+  background: #fff5df;
+  color: #704815;
+  font-size: 0.84rem;
+}
+
+.recovery-notice button {
+  border-color: #c8954e;
+  background: #fffaf0;
+}
+
 .workspace-grid {
   display: grid;
   grid-template-columns: minmax(180px, 240px) minmax(260px, 1fr) minmax(260px, 0.9fr);
@@ -358,6 +377,17 @@ h2 {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.diagnostics-panel summary {
+  cursor: pointer;
+  font-size: 1.17rem;
+  font-weight: 700;
+}
+
+.diagnostics-panel summary .muted {
+  margin-left: 4px;
+  font-size: 0.8rem;
 }
 
 .diagnostic-list button {

@@ -7,12 +7,12 @@ Updated: 2026-07-11
 | Requirement | Evidence | Status |
 |---|---|---|
 | Protocol ordering and forward compatibility | Golden stream, runtime decoders, epoch/cancellation tests | Pass |
-| Incremental HTML renderer | Stable block/page tests, virtualization test, Chromium render | Pass |
-| Bidirectional sync and diagnostics | Span-index tests and Chromium click/focus/highlight flow | Pass |
+| Incremental HTML renderer | Stable block/page tests, virtualization, removal-storm chunking, Chromium render | Pass |
+| Bidirectional sync and diagnostics | Span-index tests and Chromium click/focus/highlight/collapse flow | Pass |
 | Local-first persistence | Memory/OPFS store tests and Chromium reload persistence | Pass |
 | ZIP/folder portability | Nested binary/text archive and folder-import tests | Pass |
 | Resource integrity and caching | SHA-256, LRU, dedupe, fallback, sync-handle tests | Pass |
-| Worker recovery | Fatal restart and project replay test | Pass |
+| Worker recovery | Fatal restart, current-project replay, and dismissible recovery-alert tests | Pass |
 | Static hosting | Build verifier checks worker, MIME/cache headers, and SPA fallback | Pass |
 | Cold demo first render ≤3 s | Chromium launch test | Pass with fake engine |
 | Bundle reproducibility | Rust byte-identical manifest/digest and dedupe tests | Pass |

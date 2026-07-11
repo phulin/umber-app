@@ -24,3 +24,4 @@
 - Verification queues two saturated edits, proves the orchestrator reaches epoch 2 before any message is sent, then proves the single coalesced `XY` insertion is labeled epoch 2 after idle.
 - Follow-up audit: session filtering compared diagnostics only with the latest rendered patch. An epoch-1 diagnostic could briefly appear after a local epoch-2 edit but before its patch, violating superseded-diagnostic semantics.
 - Resolution: both session and orchestrator compare diagnostic/progress/PDF epochs with the latest local edit. Stale `idle` progress remains an internal control signal so queued edits flush, but it is not published to subscribers.
+- UI audit found the diagnostic list was permanently expanded even though §3.7 specifies a collapsible bottom panel. Resolution: use an initially open native `details` disclosure with an accessible summary/count while retaining the existing diagnostic click-to-source controls. Chromium verifies open and collapsed states.

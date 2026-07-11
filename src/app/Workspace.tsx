@@ -19,6 +19,7 @@ import { CompileOrchestrator } from "../features/tex-compile/compileOrchestrator
 import { createDemoEngineTransport } from "../features/tex-compile/demoEngineTransport";
 import {
   createWasmWorkerTransport,
+  type EngineTransport,
   RestartableEngineTransport,
 } from "../features/tex-compile/engineTransport";
 import type { Diagnostic, ProjectFile, SourceSpan } from "../features/tex-compile/protocol";
@@ -52,6 +53,7 @@ type WorkspaceProps = {
   readOnly?: boolean;
   project?: { id: string; store: ProjectStore; downloadable?: boolean };
   onCopyDemo?: (documents: readonly WorkspaceDocument[]) => void | Promise<void>;
+  engineTransport?: EngineTransport;
 };
 
 export function Workspace(props: WorkspaceProps) {
@@ -66,7 +68,8 @@ export function Workspace(props: WorkspaceProps) {
   });
   const entryDocument = documents.find(({ path }) => path === props.entry) ?? documents[0];
   const [activeDocId, setActiveDocId] = createSignal(entryDocument?.id ?? "");
-  const [engineStatus, setEngineStatus] = createSignal("Starting fake engine…");
+  const [engineStatus, setEngineStatus] = createSignal("Starting engine…");
+  const [recoveryNotice, setRecoveryNotice] = createSignal<string>();
   const [previewPatch, setPreviewPatch] = createSignal<PatchMessage>();
   const [previewEpoch, setPreviewEpoch] = createSignal(0);
   const [diagnostics, setDiagnostics] = createSignal<Diagnostic[]>([]);
@@ -83,9 +86,10 @@ export function Workspace(props: WorkspaceProps) {
   const telemetry = new TelemetryClient();
   const [telemetryEnabled, setTelemetryEnabled] = createSignal(telemetry.enabled);
   const orchestrator = new CompileOrchestrator(
-    liveEngine
-      ? new RestartableEngineTransport(createWasmWorkerTransport)
-      : createDemoEngineTransport(),
+    props.engineTransport ??
+      (liveEngine
+        ? new RestartableEngineTransport(createWasmWorkerTransport)
+        : createDemoEngineTransport()),
   );
   const fontManager =
     liveEngine && bundleBaseUrl
@@ -172,6 +176,7 @@ export function Workspace(props: WorkspaceProps) {
       }
       if (message.t === "fatal") {
         if (message.kind === "worker") telemetry.recordHealth("worker-crash");
+        setRecoveryNotice(`Engine recovery started automatically · ${message.message}`);
         setEngineStatus(`Engine restarting · ${message.message}`);
       }
     });
@@ -243,6 +248,17 @@ export function Workspace(props: WorkspaceProps) {
         <span class="activity-dot" aria-hidden="true" />
         <span>{engineStatus()}</span>
       </section>
+
+      <Show when={recoveryNotice()}>
+        {(notice) => (
+          <aside class="recovery-notice" role="alert">
+            <span>{notice()}</span>
+            <button type="button" onClick={() => setRecoveryNotice()}>
+              Dismiss
+            </button>
+          </aside>
+        )}
+      </Show>
 
       <section class="workspace-grid" aria-label="Workspace preview">
         <aside class="panel file-tree">
@@ -360,8 +376,10 @@ export function Workspace(props: WorkspaceProps) {
             Share anonymous performance metrics
           </label>
         </div>
-        <div>
-          <h2>Diagnostics</h2>
+        <details class="diagnostics-panel" open>
+          <summary>
+            Diagnostics <span class="muted">{diagnostics().length}</span>
+          </summary>
           <Show when={diagnostics().length > 0} fallback={<p>No diagnostics.</p>}>
             <ul class="diagnostic-list">
               <For each={diagnostics()}>
@@ -379,7 +397,7 @@ export function Workspace(props: WorkspaceProps) {
               </For>
             </ul>
           </Show>
-        </div>
+        </details>
       </section>
     </>
   );

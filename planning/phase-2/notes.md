@@ -10,6 +10,7 @@
 ## Errors and Resolutions
 - The font-manager deferred test inferred a recursive `never` promise type. Resolution: type the fake face against the explicit `LoadableFontFace` interface.
 - jsdom exposed `requestAnimationFrame` without advancing frames, so the virtualization test observed no pages. Resolution: install a deterministic timer-backed animation-frame stub in that test.
+- The removal-storm unit test passed Vitest transpilation but failed the strict production type build because protocol `PagePatch` metadata lacks rendered-page `blocks`. Resolution: construct the current-page fixture with an explicit empty block list.
 
 ## Verification
 - `npm run test`: 6 files and 15 tests passed, including stable block operations, stale epochs, streaming spans, font deduplication, and ten-page virtualization.
@@ -24,3 +25,4 @@
 - Chromium selection evidence confirms the fake engine's rendered block copies as `Hello, Umber.` in readable order.
 - Follow-up audit: `PageBody` concatenated every block's HTML and called `replaceChildren` on the page content root. This discarded unchanged block nodes instead of applying stable-ID subtree replacement.
 - Resolution: reconcile page components by stable `pageId`, render stable block objects through keyed `For`, and parse/swap HTML inside a `data-block-id` root with `display: contents`. Unit evidence proves an unchanged sibling node is identical before/after while the changed block root is replaced.
+- Final audit found that `removePages` did not contribute to the splitter's affected-page set, so a large removal-only patch could delete every page in one frame. Resolution: include removed IDs in viewport-prioritized ordering and place each removal in its corresponding page chunk. A focused test proves ten removals become ten page chunks plus metadata.

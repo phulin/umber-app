@@ -27,6 +27,7 @@ export function splitPatchForFrames(
 ): PatchMessage[] {
   const pageIds = new Set([
     ...patch.pages.map(({ pageId }) => pageId),
+    ...patch.removePages,
     ...patch.blocks.map(({ pageId }) => pageId),
     ...patch.removeBlocks.map(({ pageId }) => pageId),
   ]);
@@ -49,6 +50,7 @@ export function splitPatchForFrames(
     {
       ...patch,
       pages: [],
+      removePages: [],
       blocks: [],
       removeBlocks: [],
       final: false,
@@ -59,7 +61,7 @@ export function splitPatchForFrames(
       t: "patch",
       epoch: patch.epoch,
       pages: patch.pages.filter((page) => page.pageId === pageId),
-      removePages: [],
+      removePages: patch.removePages.includes(pageId) ? [pageId] : [],
       blocks: patch.blocks.filter((block) => block.pageId === pageId),
       removeBlocks: patch.removeBlocks.filter((block) => block.pageId === pageId),
       spans: [],

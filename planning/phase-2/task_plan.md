@@ -20,6 +20,7 @@ Render coordinate-identical HTML patches safely and smoothly with stable page/bl
 - [x] Verify rendered block selection produces readable text order
 - [x] Preserve unchanged page and block DOM nodes across stable-ID patch updates
 - [x] Replace only changed `blockId` subtrees through detached parsing
+- [x] Chunk large page-removal storms instead of applying all removals in one frame
 
 ## Acceptance Evidence
 - Stable-ID block replacement/removal and page addition/removal are unit tested.
@@ -30,4 +31,4 @@ Render coordinate-identical HTML patches safely and smoothly with stable page/bl
 - `npm run check`, `npm run test`, `npm run build`, and `npm run test:e2e` pass.
 
 ## Status
-**Complete after stable-DOM remediation** — Page and block components preserve identity by stable IDs; only changed detached-parsed subtrees swap.
+**Complete after removal-storm remediation** — Addition, update, and removal-only patch storms all use viewport-prioritized per-page chunks.

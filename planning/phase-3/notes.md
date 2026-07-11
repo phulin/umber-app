@@ -38,3 +38,4 @@
 - Resolution: add an explicit transport error channel; `WorkerEngineTransport` forwards browser `ErrorEvent`, while `RestartableEngineTransport` emits a synthetic protocol fatal, restarts, and replays cloned bootstrap buffers.
 - Follow-up audit: the replayed `openProject` message remained the original snapshot. Recovery after user edits could compile stale source, violating the automatic full-recompile requirement.
 - Resolution: update a byte-exact retained project shadow before transfer for every edit/file-add/file-remove. The panic-recovery test edits `source` to `updated` and proves the fresh worker receives `updated` in its replayed `openProject`.
+- UX audit found automatic restart only changed the slim activity text, despite §4 requiring a user toast. Resolution: fatal/crash messages now raise a persistent `role="alert"` recovery notice with explicit dismissal; a workspace test drives the engine message boundary and verifies both states.

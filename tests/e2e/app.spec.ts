@@ -10,6 +10,10 @@ test("renders the app shell", async ({ page }) => {
   const previewSpan = page.locator("#span-1");
   await expect(previewSpan).toHaveText("Hello, Umber.");
   await expect(page.getByText("Fake engine source-span check")).toBeVisible();
+  const diagnostics = page.locator("details.diagnostics-panel");
+  await expect(diagnostics).toHaveAttribute("open", "");
+  await diagnostics.locator("summary").click();
+  await expect(diagnostics).not.toHaveAttribute("open", "");
   const selectedText = await previewSpan.evaluate((element) => {
     const selection = window.getSelection();
     const range = document.createRange();

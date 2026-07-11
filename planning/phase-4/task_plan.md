@@ -20,6 +20,7 @@ Complete the interactive editing loop with byte-accurate incremental deltas, mul
 - [x] Advance the monotonic epoch for every local edit, including edits queued during saturation
 - [x] Label each coalesced per-document batch with its latest constituent edit epoch
 - [x] Drop diagnostics and progress older than the latest local edit even before its patch arrives
+- [x] Make the bottom diagnostics panel collapsible while retaining click-to-source behavior
 
 ## Acceptance Evidence
 - Unicode edits prove byte ranges without whole-document re-encoding.
@@ -30,4 +31,4 @@ Complete the interactive editing loop with byte-accurate incremental deltas, mul
 - `npm run check`, `npm run test`, `npm run build`, and `npm run test:e2e` pass.
 
 ## Status
-**Complete after epoch remediation** — User-edit epochs are independent of message count, and saturated batches carry the latest constituent epoch.
+**Complete after diagnostics-panel remediation** — Diagnostic ordering, navigation, inline markers, and the collapsible bottom presentation are verified.

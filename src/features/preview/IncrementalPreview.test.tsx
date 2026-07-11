@@ -84,6 +84,33 @@ describe("IncrementalPreview", () => {
     expect(chunks.at(-1)?.final).toBe(true);
   });
 
+  it("chunks page-removal-only storms by page", () => {
+    const currentPages = longDocumentPatch().pages.map((page) => ({ ...page, blocks: [] }));
+    const patch: PatchMessage = {
+      t: "patch",
+      epoch: 2,
+      pages: [],
+      removePages: currentPages.map(({ pageId }) => pageId),
+      blocks: [],
+      removeBlocks: [],
+      spans: [],
+      final: true,
+    };
+
+    const chunks = splitPatchForFrames(patch, { first: 3, last: 5 }, currentPages, 5);
+
+    expect(chunks).toHaveLength(11);
+    expect(chunks[0]?.removePages).toEqual([]);
+    expect(chunks.slice(1).every((chunk) => chunk.removePages.length === 1)).toBe(true);
+    expect(
+      chunks
+        .slice(1, 4)
+        .flatMap((chunk) => chunk.removePages)
+        .sort(),
+    ).toEqual(["page-4", "page-5", "page-6"]);
+    expect(chunks.at(-1)?.final).toBe(true);
+  });
+
   it("preserves unchanged block DOM while replacing one stable block subtree", async () => {
     const initial = longDocumentPatch();
     initial.pages = initial.pages.slice(0, 1);
