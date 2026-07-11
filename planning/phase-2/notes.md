@@ -16,3 +16,9 @@
 - `npm run check`: passed, 28 files checked.
 - `npm run build`: strict TypeScript and Vite build passed.
 - `npm run test:e2e`: Chromium passed with the fake-engine patch rendered through `IncrementalPreview`.
+
+## Completion Audit Reopen
+- The renderer mounted only viewport ±2 content, but `flushPatches` still applied every page/block in one model operation. This could exceed the 8 ms frame budget on a 200-page full recompile and did not prioritize viewport pages.
+- Resolution: split patches larger than 20 affected pages into an epoch/span/removal metadata chunk plus one chunk per page; order viewport pages by distance from viewport center, then offscreen pages.
+- The scheduler applies at least one chunk per animation frame and continues only while measured work remains below 8 ms. DOM revisions and scroll-anchor restoration happen between frame batches.
+- Chromium selection evidence confirms the fake engine's rendered block copies as `Hello, Umber.` in readable order.

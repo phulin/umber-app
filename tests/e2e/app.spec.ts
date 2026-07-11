@@ -9,6 +9,15 @@ test("renders the app shell", async ({ page }) => {
   const previewSpan = page.locator("#span-1");
   await expect(previewSpan).toHaveText("Hello, Umber.");
   await expect(page.getByText("Fake engine source-span check")).toBeVisible();
+  const selectedText = await previewSpan.evaluate((element) => {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    return selection?.toString();
+  });
+  expect(selectedText).toBe("Hello, Umber.");
 
   await previewSpan.click();
   await expect(page.getByRole("textbox").first()).toBeFocused();

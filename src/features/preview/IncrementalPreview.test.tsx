@@ -1,6 +1,6 @@
 import { render } from "solid-js/web";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { IncrementalPreview } from "./IncrementalPreview";
+import { IncrementalPreview, splitPatchForFrames } from "./IncrementalPreview";
 import type { PatchMessage } from "./previewDocument";
 
 const html = (value: string) => new TextEncoder().encode(value).buffer;
@@ -54,5 +54,32 @@ describe("IncrementalPreview", () => {
     expect(root.textContent).toContain("Page 1");
     expect(root.textContent).not.toContain("Page 6");
     expect(root.querySelector<HTMLElement>('[data-page-id="page-1"]')?.style.height).toBe("1056px");
+  });
+
+  it("chunks large patch storms by page with viewport pages first", () => {
+    const patch = longDocumentPatch();
+    patch.pages = Array.from({ length: 30 }, (_, index) => ({
+      pageId: `page-${index}`,
+      widthPt: 612,
+      heightPt: 792,
+      index,
+    }));
+    patch.blocks = patch.pages.map((page) => ({
+      pageId: page.pageId,
+      blockId: `block-${page.index}`,
+      html: html(`<p>Page ${page.index}</p>`),
+    }));
+
+    const chunks = splitPatchForFrames(patch, { first: 10, last: 12 }, [], 5);
+
+    expect(chunks).toHaveLength(31);
+    expect(chunks[0]).toMatchObject({ pages: [], blocks: [], final: false });
+    expect(
+      chunks
+        .slice(1, 4)
+        .map((chunk) => chunk.pages[0]?.index)
+        .sort(),
+    ).toEqual([10, 11, 12]);
+    expect(chunks.at(-1)?.final).toBe(true);
   });
 });

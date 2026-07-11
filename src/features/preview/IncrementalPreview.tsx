@@ -12,8 +12,62 @@ type IncrementalPreviewProps = {
 };
 
 type Anchor = { pageId: string; top: number };
+type VisibleRange = { first: number; last: number };
+type PatchWork = { chunks: PatchMessage[]; epoch: number; workMs: number; applied: boolean };
 
 const ptToPx = (points: number) => points * (96 / 72);
+const frameBudgetMs = 8;
+const chunkThresholdPages = 20;
+
+export function splitPatchForFrames(
+  patch: PatchMessage,
+  visible: VisibleRange,
+  currentPages: readonly PreviewPage[] = [],
+  threshold = chunkThresholdPages,
+): PatchMessage[] {
+  const pageIds = new Set([
+    ...patch.pages.map(({ pageId }) => pageId),
+    ...patch.blocks.map(({ pageId }) => pageId),
+    ...patch.removeBlocks.map(({ pageId }) => pageId),
+  ]);
+  if (pageIds.size <= threshold) return [patch];
+
+  const pageMetadata = new Map(
+    [...currentPages, ...patch.pages].map((page) => [page.pageId, page] as const),
+  );
+  const center = (visible.first + visible.last) / 2;
+  const orderedPageIds = [...pageIds].sort((left, right) => {
+    const leftIndex = pageMetadata.get(left)?.index ?? Number.MAX_SAFE_INTEGER;
+    const rightIndex = pageMetadata.get(right)?.index ?? Number.MAX_SAFE_INTEGER;
+    const leftVisible = leftIndex >= visible.first && leftIndex <= visible.last;
+    const rightVisible = rightIndex >= visible.first && rightIndex <= visible.last;
+    if (leftVisible !== rightVisible) return leftVisible ? -1 : 1;
+    return Math.abs(leftIndex - center) - Math.abs(rightIndex - center) || leftIndex - rightIndex;
+  });
+
+  const chunks: PatchMessage[] = [
+    {
+      ...patch,
+      pages: [],
+      blocks: [],
+      removeBlocks: [],
+      final: false,
+    },
+  ];
+  for (const [position, pageId] of orderedPageIds.entries()) {
+    chunks.push({
+      t: "patch",
+      epoch: patch.epoch,
+      pages: patch.pages.filter((page) => page.pageId === pageId),
+      removePages: [],
+      blocks: patch.blocks.filter((block) => block.pageId === pageId),
+      removeBlocks: patch.removeBlocks.filter((block) => block.pageId === pageId),
+      spans: [],
+      final: patch.final && position === orderedPageIds.length - 1,
+    });
+  }
+  return chunks;
+}
 
 function requestFrame(callback: FrameRequestCallback): number {
   if (typeof requestAnimationFrame === "function") return requestAnimationFrame(callback);
@@ -45,6 +99,7 @@ export function IncrementalPreview(props: IncrementalPreviewProps) {
   let scroller: HTMLDivElement | undefined;
   let frameHandle: number | undefined;
   let highlightedElement: HTMLElement | undefined;
+  let activeWork: PatchWork | undefined;
 
   const pages = createMemo(() => {
     revision();
@@ -90,19 +145,43 @@ export function IncrementalPreview(props: IncrementalPreviewProps) {
 
   const flushPatches = () => {
     frameHandle = undefined;
-    const startedAt = performance.now();
+    if (!activeWork) {
+      const patch = queuedPatches.shift();
+      if (!patch) return;
+      activeWork = {
+        chunks: splitPatchForFrames(patch, visibleRange(), model.pages),
+        epoch: patch.epoch,
+        workMs: 0,
+        applied: false,
+      };
+    }
     const anchor = captureAnchor();
     let changed = false;
-    for (const patch of queuedPatches.splice(0)) {
-      changed = model.applyPatch(patch).applied || changed;
+    const frameStartedAt = performance.now();
+    do {
+      const chunk = activeWork.chunks.shift();
+      if (!chunk) break;
+      const applied = model.applyPatch(chunk).applied;
+      activeWork.applied = applied || activeWork.applied;
+      changed = applied || changed;
+    } while (activeWork.chunks.length > 0 && performance.now() - frameStartedAt < frameBudgetMs);
+    activeWork.workMs += performance.now() - frameStartedAt;
+    if (changed) {
+      const renderStartedAt = performance.now();
+      setRevision((value) => value + 1);
+      activeWork.workMs += performance.now() - renderStartedAt;
     }
-    if (!changed) return;
-    setRevision((value) => value + 1);
     frameHandle = requestFrame(() => {
       frameHandle = undefined;
       restoreAnchor(anchor);
       updateVisibleRange();
-      props.onPatchApplied?.({ epoch: model.epoch, durationMs: performance.now() - startedAt });
+      if (activeWork?.chunks.length === 0) {
+        if (activeWork.applied) {
+          props.onPatchApplied?.({ epoch: activeWork.epoch, durationMs: activeWork.workMs });
+        }
+        activeWork = undefined;
+      }
+      if (activeWork || queuedPatches.length > 0) frameHandle = requestFrame(flushPatches);
     });
   };
 

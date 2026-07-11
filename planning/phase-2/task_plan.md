@@ -15,6 +15,9 @@ Render coordinate-identical HTML patches safely and smoothly with stable page/bl
 - [x] Replace the app's temporary direct `innerHTML` path with the renderer
 - [x] Add model, renderer, font-manager, and browser tests
 - [x] Pass all project verification gates
+- [x] Chunk full-recompile patch storms across animation frames within an 8 ms work budget
+- [x] Prioritize viewport page chunks before offscreen pages
+- [x] Verify rendered block selection produces readable text order
 
 ## Acceptance Evidence
 - Stable-ID block replacement/removal and page addition/removal are unit tested.
@@ -25,4 +28,4 @@ Render coordinate-identical HTML patches safely and smoothly with stable page/bl
 - `npm run check`, `npm run test`, `npm run build`, and `npm run test:e2e` pass.
 
 ## Status
-**Complete** — The renderer and font manager are integrated with the fake engine and all verification gates pass.
+**Complete after audit remediation** — Large patch storms are page-chunked, budgeted per frame, viewport-prioritized, and selection quality is browser-verified.
