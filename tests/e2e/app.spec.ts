@@ -34,11 +34,23 @@ test("preserves independent editor documents while switching tabs", async ({ pag
   await expect(visibleEditor()).toContainText("% bib note");
 });
 
-test("copies the demo into OPFS and persists edits across reload", async ({ page }) => {
+test("persists demo scratch edits and copies their current state into a project", async ({
+  page,
+}) => {
   await page.goto("/");
+  let editor = page.locator('[role="textbox"]:visible');
+  await editor.focus();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.type("% scratch note");
+  await page.waitForTimeout(650);
+
+  await page.reload();
+  editor = page.locator('[role="textbox"]:visible');
+  await expect(editor).toContainText("% scratch note");
   await page.getByRole("button", { name: "Copy into a project" }).click();
   await expect(page).toHaveURL(/#\/project\//);
-  const editor = page.locator('[role="textbox"]:visible');
+  editor = page.locator('[role="textbox"]:visible');
+  await expect(editor).toContainText("% scratch note");
   await editor.focus();
   await page.keyboard.press("Control+End");
   await page.keyboard.type("% persisted note");

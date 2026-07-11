@@ -31,8 +31,8 @@ type WorkspaceProps = {
   documents: readonly WorkspaceDocument[];
   entry: string;
   readOnly?: boolean;
-  project?: { id: string; store: ProjectStore };
-  onCopyDemo?: () => void | Promise<void>;
+  project?: { id: string; store: ProjectStore; downloadable?: boolean };
+  onCopyDemo?: (documents: readonly WorkspaceDocument[]) => void | Promise<void>;
 };
 
 export function Workspace(props: WorkspaceProps) {
@@ -184,11 +184,22 @@ export function Workspace(props: WorkspaceProps) {
         </div>
         <div class="workspace-actions">
           <Show when={props.onCopyDemo}>
-            <button type="button" onClick={() => void props.onCopyDemo?.()}>
+            <button
+              type="button"
+              onClick={() =>
+                void props.onCopyDemo?.(
+                  documents.map((document) => ({
+                    id: document.id,
+                    path: document.path,
+                    text: document.text(),
+                  })),
+                )
+              }
+            >
               Copy into a project
             </button>
           </Show>
-          <Show when={props.project}>
+          <Show when={props.project && props.project.downloadable !== false}>
             <button type="button" onClick={() => void downloadProject()}>
               Download project
             </button>

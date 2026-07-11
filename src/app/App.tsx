@@ -41,11 +41,17 @@ const navigate = (path: string) => {
   window.location.hash = path;
 };
 
-async function createStore(): Promise<ProjectStore> {
+type AppStores = { projects: ProjectStore; scratch: ProjectStore };
+
+async function createStores(): Promise<AppStores> {
   try {
-    return await OpfsProjectStore.create();
+    const root = await navigator.storage.getDirectory();
+    return {
+      projects: await OpfsProjectStore.create(root, "projects"),
+      scratch: await OpfsProjectStore.create(root, "scratch"),
+    };
   } catch {
-    return new MemoryProjectStore();
+    return { projects: new MemoryProjectStore(), scratch: new MemoryProjectStore() };
   }
 }
 
@@ -175,9 +181,51 @@ function ProjectScreen(props: { store: ProjectStore; id: string }) {
   );
 }
 
+function DemoScreen(props: {
+  scratchStore: ProjectStore;
+  onCopy: (documents: readonly WorkspaceDocument[]) => void | Promise<void>;
+}) {
+  const [demo] = createResource(async () => {
+    let manifest = await props.scratchStore.getManifest("demo");
+    if (!manifest) {
+      manifest = await props.scratchStore.createProject({
+        id: "demo",
+        name: "Try Umber",
+        entry: "main.tex",
+        files: Object.fromEntries(
+          demoDocuments.map((document) => [document.path, new TextEncoder().encode(document.text)]),
+        ),
+      });
+    }
+    const documents: WorkspaceDocument[] = [];
+    for (const path of manifest.files.filter((file) => /\.(tex|bib|sty|cls|md|txt)$/i.test(file))) {
+      documents.push({
+        id: path === "main.tex" ? "main" : path,
+        path,
+        text: new TextDecoder().decode(await props.scratchStore.readFile("demo", path)),
+      });
+    }
+    return { manifest, documents };
+  });
+
+  return (
+    <Show when={demo()} fallback={<p class="loading-state">Opening demo scratch space…</p>}>
+      {(loaded) => (
+        <Workspace
+          name="Try Umber"
+          documents={loaded().documents}
+          entry={loaded().manifest.entry}
+          project={{ id: "demo", store: props.scratchStore, downloadable: false }}
+          onCopyDemo={props.onCopy}
+        />
+      )}
+    </Show>
+  );
+}
+
 export function App() {
   const [route, setRoute] = createSignal<Route>(parseRoute());
-  const [store] = createResource(createStore);
+  const [stores] = createResource(createStores);
 
   onMount(() => {
     const updateRoute = () => setRoute(parseRoute());
@@ -186,12 +234,18 @@ export function App() {
     onCleanup(() => window.removeEventListener("hashchange", updateRoute));
   });
 
-  const copyDemo = async (projectStore: ProjectStore) => {
+  const copyDemo = async (
+    projectStore: ProjectStore,
+    currentDocuments: readonly WorkspaceDocument[],
+  ) => {
     const project = await projectStore.createProject({
       name: "Umber demo",
       entry: "main.tex",
       files: Object.fromEntries(
-        demoDocuments.map((document) => [document.path, new TextEncoder().encode(document.text)]),
+        currentDocuments.map((document) => [
+          document.path,
+          new TextEncoder().encode(document.text),
+        ]),
       ),
     });
     navigate(`/project/${project.id}`);
@@ -214,24 +268,22 @@ export function App() {
         </nav>
       </header>
 
-      <Show when={store()} fallback={<p class="loading-state">Opening local project storage…</p>}>
-        {(projectStore) => (
+      <Show when={stores()} fallback={<p class="loading-state">Opening local project storage…</p>}>
+        {(appStores) => (
           <Switch>
             <Match when={route().screen === "projects"}>
-              <ProjectList store={projectStore()} />
+              <ProjectList store={appStores().projects} />
             </Match>
             <Match when={route().screen === "project"}>
               <ProjectScreen
-                store={projectStore()}
+                store={appStores().projects}
                 id={(route() as Extract<Route, { screen: "project" }>).id}
               />
             </Match>
             <Match when={route().screen === "demo"}>
-              <Workspace
-                name="Try Umber"
-                documents={demoDocuments}
-                entry="main.tex"
-                onCopyDemo={() => copyDemo(projectStore())}
+              <DemoScreen
+                scratchStore={appStores().scratch}
+                onCopy={(documents) => copyDemo(appStores().projects, documents)}
               />
             </Match>
           </Switch>

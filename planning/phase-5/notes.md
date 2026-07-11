@@ -18,3 +18,8 @@
 - `npm run test`: 20 files and 42 tests passed.
 - `npm run build`: strict TypeScript and Vite build passed; app, worker, OPFS, and `fflate` code bundle successfully.
 - `npm run test:e2e`: 3 Chromium tests passed, including demo sync, multi-file state, demo copy, autosave, OPFS reload persistence, and project-list navigation.
+
+## Completion Audit Reopen
+- The demo workspace had no persistence adapter, so a refresh discarded edits despite §3.9 requiring OPFS scratch space. The earlier browser persistence test only covered copied real projects and was insufficient evidence for the demo requirement.
+- Resolution: parameterize the OPFS project-store namespace, create an isolated `/scratch/demo` project, reuse the 500 ms autosave/lifecycle flush path, and pass current workspace buffers into the copy action.
+- Updated Chromium evidence proves a scratch edit survives refresh, appears in the copied real project, and remains separate from the user project list until copied.

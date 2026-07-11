@@ -118,9 +118,13 @@ export class OpfsProjectStore implements ProjectStore {
     this.#projects = projects;
   }
 
-  static async create(root?: FileSystemDirectoryHandle): Promise<OpfsProjectStore> {
+  static async create(
+    root?: FileSystemDirectoryHandle,
+    namespace = "projects",
+  ): Promise<OpfsProjectStore> {
+    if (!validId.test(namespace)) throw new Error(`Invalid project-store namespace: ${namespace}`);
     const storageRoot = root ?? (await navigator.storage.getDirectory());
-    const projects = await storageRoot.getDirectoryHandle("projects", { create: true });
+    const projects = await storageRoot.getDirectoryHandle(namespace, { create: true });
     return new OpfsProjectStore(projects);
   }
 

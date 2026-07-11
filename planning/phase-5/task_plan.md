@@ -17,6 +17,9 @@ Make projects survive reload without accounts, provide portable ZIP backup/impor
 - [x] Add a debug performance panel and budget summaries
 - [x] Add persistence, archive, locking, routing, and browser tests
 - [x] Pass all project verification gates
+- [x] Persist demo edits in an isolated OPFS scratch namespace across refreshes
+- [x] Copy the current edited demo state, not only the original fixture, into a real project
+- [x] Add Chromium evidence for demo refresh persistence and edited-state copying
 
 ## Acceptance Evidence
 - Store tests prove the documented OPFS layout and round-trip persistence.
@@ -28,4 +31,4 @@ Make projects survive reload without accounts, provide portable ZIP backup/impor
 - `npm run check`, `npm run test`, `npm run build`, and `npm run test:e2e` pass.
 
 ## Status
-**Complete** — Persistence, portability, routing, demo conversion, and performance instrumentation are implemented and verified.
+**Complete after audit remediation** — Demo scratch persistence and edited-state copying now satisfy §3.9 and pass Chromium verification.
