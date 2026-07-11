@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { EditorDelta } from "../editor/CodeEditor";
 import { CompileOrchestrator } from "./compileOrchestrator";
 import { FakeEngineTransport } from "./engineTransport";
@@ -60,6 +60,21 @@ describe("CompileOrchestrator", () => {
     const edit = transport.received.at(-1);
     expect(edit).toMatchObject({ t: "edit", epoch: 2, fromByte: 1, toByte: 1 });
     expect(edit?.t === "edit" ? new TextDecoder().decode(edit.insert) : "").toBe("XY");
+    orchestrator.dispose();
+  });
+
+  it("uses stale idle progress for control flow without exposing superseded output", () => {
+    const { transport, orchestrator } = setup();
+    const listener = vi.fn();
+    orchestrator.subscribe(listener);
+    transport.emit({ t: "saturated", queuedDeltas: 1 });
+    orchestrator.submitEdit(delta(1, 1, "X"));
+    transport.emit({ t: "diagnostics", epoch: 0, items: [] });
+    transport.emit({ t: "progress", epoch: 0, phase: "idle" });
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith({ t: "saturated", queuedDeltas: 1 });
+    expect(transport.received.at(-1)).toMatchObject({ t: "edit", epoch: 1 });
     orchestrator.dispose();
   });
 });

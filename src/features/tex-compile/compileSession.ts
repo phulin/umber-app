@@ -82,8 +82,11 @@ export class CompileSession {
       if (message.epoch < this.#latestAppliedEpoch) return;
       this.#latestAppliedEpoch = message.epoch;
     } else if (message.t === "diagnostics" || message.t === "pdf") {
-      if (message.epoch < this.#latestAppliedEpoch) return;
-    } else if (message.t === "progress" && message.epoch < this.#latestAppliedEpoch) {
+      if (message.epoch < Math.max(this.#latestAppliedEpoch, this.#editEpoch)) return;
+    } else if (
+      message.t === "progress" &&
+      message.epoch < Math.max(this.#latestAppliedEpoch, this.#editEpoch)
+    ) {
       return;
     }
 

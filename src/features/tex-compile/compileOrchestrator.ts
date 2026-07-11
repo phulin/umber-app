@@ -82,6 +82,12 @@ export class CompileOrchestrator {
       this.#saturated = false;
       this.#flushPending();
     }
+    if (
+      (message.t === "diagnostics" || message.t === "progress" || message.t === "pdf") &&
+      message.epoch < this.#editEpoch
+    ) {
+      return;
+    }
     for (const listener of this.#listeners) listener(message);
   }
 

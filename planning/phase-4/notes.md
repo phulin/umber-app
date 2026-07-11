@@ -22,3 +22,5 @@
 - `CompileSession.edit()` owned epoch increments, so edits withheld during saturation did not advance the epoch until one coalesced message was sent. This conflated user-edit sequencing with transport-message count.
 - The corrected design assigns an epoch at `CompileOrchestrator.submitEdit`, records the latest pending epoch per document, and lets `CompileSession` send an explicitly assigned epoch.
 - Verification queues two saturated edits, proves the orchestrator reaches epoch 2 before any message is sent, then proves the single coalesced `XY` insertion is labeled epoch 2 after idle.
+- Follow-up audit: session filtering compared diagnostics only with the latest rendered patch. An epoch-1 diagnostic could briefly appear after a local epoch-2 edit but before its patch, violating superseded-diagnostic semantics.
+- Resolution: both session and orchestrator compare diagnostic/progress/PDF epochs with the latest local edit. Stale `idle` progress remains an internal control signal so queued edits flush, but it is not published to subscribers.

@@ -19,6 +19,7 @@ Complete the interactive editing loop with byte-accurate incremental deltas, mul
 - [x] Pass all project verification gates
 - [x] Advance the monotonic epoch for every local edit, including edits queued during saturation
 - [x] Label each coalesced per-document batch with its latest constituent edit epoch
+- [x] Drop diagnostics and progress older than the latest local edit even before its patch arrives
 
 ## Acceptance Evidence
 - Unicode edits prove byte ranges without whole-document re-encoding.

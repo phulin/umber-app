@@ -54,6 +54,32 @@ describe("CompileSession", () => {
     session.dispose();
   });
 
+  it("drops superseded diagnostics before the newer patch arrives", () => {
+    const transport = new FakeEngineTransport();
+    const session = new CompileSession(transport);
+    const listener = vi.fn();
+    session.subscribe(listener);
+
+    session.editAtEpoch(2, "main", 0, 0, "new");
+    transport.emit({
+      t: "diagnostics",
+      epoch: 1,
+      items: [
+        {
+          severity: "error",
+          docId: "main",
+          byteStart: 0,
+          byteEnd: 1,
+          message: "superseded",
+        },
+      ],
+    });
+    transport.emit({ t: "progress", epoch: 1, phase: "typesetting" });
+
+    expect(listener).not.toHaveBeenCalled();
+    session.dispose();
+  });
+
   it("replays the recorded golden stream through the fake engine", async () => {
     const transport = new FakeEngineTransport(paragraphEditReplay);
     const session = new CompileSession(transport);
