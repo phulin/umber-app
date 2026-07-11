@@ -61,7 +61,17 @@ describe("CompileSession", () => {
     session.subscribe((message) => received.push(message));
 
     session.send({ t: "init", bundleDigest: "test-bundle", engineOpts: {} });
-    session.edit("main", 41, 46, "Hello, Umber.");
+    session.send({
+      t: "openProject",
+      entry: "main.tex",
+      files: [
+        {
+          docId: "main",
+          path: "main.tex",
+          bytes: new TextEncoder().encode("Hello, Umber.").buffer,
+        },
+      ],
+    });
     await new Promise<void>((resolve) => queueMicrotask(resolve));
 
     expect(received.map(({ t }) => t)).toEqual([

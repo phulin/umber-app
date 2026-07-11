@@ -1,10 +1,13 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import type { SourceSpan } from "../tex-compile/protocol";
 import type { PatchMessage, PreviewPage } from "./previewDocument";
 import { PreviewDocument } from "./previewDocument";
 
 type IncrementalPreviewProps = {
   patch?: PatchMessage;
   overscanPages?: number;
+  highlightedElementId?: string;
+  onSourceSpan?: (span: SourceSpan) => void;
 };
 
 type Anchor = { pageId: string; top: number };
@@ -40,6 +43,7 @@ export function IncrementalPreview(props: IncrementalPreviewProps) {
   const queuedPatches: PatchMessage[] = [];
   let scroller: HTMLDivElement | undefined;
   let frameHandle: number | undefined;
+  let highlightedElement: HTMLElement | undefined;
 
   const pages = createMemo(() => {
     revision();
@@ -106,13 +110,41 @@ export function IncrementalPreview(props: IncrementalPreviewProps) {
     if (frameHandle === undefined) frameHandle = requestFrame(flushPatches);
   });
 
+  createEffect(() => {
+    revision();
+    const elemId = props.highlightedElementId;
+    highlightedElement?.classList.remove("source-sync-highlight");
+    highlightedElement = undefined;
+    if (!elemId || !scroller) return;
+    const element = [...scroller.querySelectorAll<HTMLElement>("[id]")].find(
+      (candidate) => candidate.id === elemId,
+    );
+    if (!element) return;
+    element.classList.add("source-sync-highlight");
+    element.scrollIntoView({ block: "center", behavior: "smooth" });
+    highlightedElement = element;
+  });
+
   onMount(updateVisibleRange);
   onCleanup(() => {
     if (frameHandle !== undefined) cancelFrame(frameHandle);
   });
 
   return (
-    <div ref={scroller} class="preview-canvas" onScroll={updateVisibleRange}>
+    <div
+      ref={scroller}
+      class="preview-canvas"
+      onScroll={updateVisibleRange}
+      onPointerDown={(event) => {
+        const element = (event.target as Element).closest<HTMLElement>("[id]");
+        if (!element || !scroller?.contains(element)) return;
+        const span = model.spanForElement(element.id);
+        if (span) {
+          event.preventDefault();
+          props.onSourceSpan?.(span);
+        }
+      }}
+    >
       <Show
         when={pages().length > 0}
         fallback={<div class="preview-empty">Waiting for a patch…</div>}

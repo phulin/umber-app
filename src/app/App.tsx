@@ -1,10 +1,13 @@
-import { createSignal, For, onCleanup, onMount } from "solid-js";
-import { CodeEditor } from "../features/editor/CodeEditor";
+import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { CodeEditor, type EditorCursor, type EditorDelta } from "../features/editor/CodeEditor";
+import { Utf8OffsetMap } from "../features/editor/utf8OffsetMap";
 import { IncrementalPreview } from "../features/preview/IncrementalPreview";
 import type { PatchMessage } from "../features/preview/previewDocument";
+import { SpanIndex } from "../features/sync/spanIndex";
 import { paragraphEditReplay } from "../features/tex-compile/__fixtures__/paragraph-edit";
-import { CompileSession } from "../features/tex-compile/compileSession";
+import { CompileOrchestrator } from "../features/tex-compile/compileOrchestrator";
 import { FakeEngineTransport } from "../features/tex-compile/engineTransport";
+import type { Diagnostic, SourceSpan } from "../features/tex-compile/protocol";
 
 const milestones = [
   "Lock engine protocol",
@@ -15,31 +18,92 @@ const milestones = [
   "Validate launch performance",
 ];
 
-export function App() {
-  const [source, setSource] = createSignal(String.raw`\documentclass{article}
+const initialMain = String.raw`\documentclass{article}
 \begin{document}
-Hello from Umber.
-\end{document}`);
+Hello, Umber.
+\end{document}`;
+
+const initialBibliography = `@book{umber,
+  title = {Browser-Native TeX},
+  year = {2026}
+}`;
+
+export function App() {
+  const [mainSource, setMainSource] = createSignal(initialMain);
+  const [bibliography, setBibliography] = createSignal(initialBibliography);
+  const documents = [
+    { id: "main", path: "main.tex", text: mainSource, setText: setMainSource },
+    { id: "references", path: "references.bib", text: bibliography, setText: setBibliography },
+  ];
+  const [activeDocId, setActiveDocId] = createSignal("main");
   const [engineStatus, setEngineStatus] = createSignal("Starting fake engine…");
   const [previewPatch, setPreviewPatch] = createSignal<PatchMessage>();
-  const session = new CompileSession(new FakeEngineTransport(paragraphEditReplay));
+  const [previewEpoch, setPreviewEpoch] = createSignal(0);
+  const [diagnostics, setDiagnostics] = createSignal<Diagnostic[]>([]);
+  const [diagnosticEpoch, setDiagnosticEpoch] = createSignal(0);
+  const [highlightedElementId, setHighlightedElementId] = createSignal<string>();
+  const [cursorTarget, setCursorTarget] = createSignal<{
+    docId: string;
+    offset: number;
+    requestId: number;
+  }>();
+  const spans = new SpanIndex();
+  const orchestrator = new CompileOrchestrator(new FakeEngineTransport(paragraphEditReplay));
+  let cursorRequestId = 0;
+
+  const jumpToSource = (docId: string, byteOffset: number) => {
+    const document = documents.find(({ id }) => id === docId);
+    if (!document) return;
+    const offsets = new Utf8OffsetMap(document.text());
+    const utf16Offset = offsets.byteToUtf16(Math.min(byteOffset, offsets.byteLength));
+    setActiveDocId(docId);
+    setCursorTarget({ docId, offset: utf16Offset, requestId: ++cursorRequestId });
+  };
+
+  const handleCursor = (cursor: EditorCursor) => {
+    const span = spans.innermost(cursor.docId, cursor.byteOffset);
+    setHighlightedElementId(span?.elemId);
+  };
+
+  const handlePreviewSpan = (span: SourceSpan) => jumpToSource(span.docId, span.byteStart);
+  const handleEdit = (delta: EditorDelta) => orchestrator.submitEdit(delta);
 
   onMount(() => {
-    const unsubscribe = session.subscribe((message) => {
+    const unsubscribe = orchestrator.subscribe((message) => {
       if (message.t === "ready") setEngineStatus(`Ready · ${message.engineVersion}`);
       if (message.t === "progress") {
         setEngineStatus(message.detail ? `${message.phase} · ${message.detail}` : message.phase);
       }
-      if (message.t === "patch") setPreviewPatch(message);
-      if (message.t === "fatal") setEngineStatus(`Engine restart required · ${message.message}`);
+      if (message.t === "saturated") {
+        setEngineStatus(`Compiling · ${message.queuedDeltas} edits queued`);
+      }
+      if (message.t === "patch") {
+        setPreviewPatch(message);
+        setPreviewEpoch(message.epoch);
+        spans.apply(message.epoch, message.spans);
+      }
+      if (message.t === "diagnostics" && message.epoch >= diagnosticEpoch()) {
+        setDiagnosticEpoch(message.epoch);
+        setDiagnostics(message.items);
+      }
+      if (message.t === "fatal") setEngineStatus(`Engine restarting · ${message.message}`);
     });
 
-    session.send({ t: "init", bundleDigest: "demo-bundle", engineOpts: { mode: "fake" } });
-    session.edit("main", 41, 46, "Hello, Umber.");
+    orchestrator.initialize(
+      { t: "init", bundleDigest: "demo-bundle", engineOpts: { mode: "fake" } },
+      {
+        entry: "main.tex",
+        files: documents.map((document) => ({
+          docId: document.id,
+          path: document.path,
+          bytes: new TextEncoder().encode(document.text()).buffer,
+        })),
+      },
+    );
     onCleanup(unsubscribe);
   });
 
-  onCleanup(() => session.dispose());
+  onCleanup(() => orchestrator.dispose());
 
   return (
     <main class="app-shell">
@@ -65,26 +129,65 @@ Hello from Umber.
             <span class="muted">Demo project</span>
           </div>
           <ul>
-            <li>main.tex</li>
-            <li>references.bib</li>
-            <li>figures/</li>
+            <For each={documents}>
+              {(document) => (
+                <li>
+                  <button
+                    type="button"
+                    classList={{ active: activeDocId() === document.id }}
+                    onClick={() => setActiveDocId(document.id)}
+                  >
+                    {document.path}
+                  </button>
+                </li>
+              )}
+            </For>
+            <li class="folder-label">figures/</li>
           </ul>
         </aside>
 
         <section class="panel editor-panel">
-          <div class="panel-heading">
-            <span>Editor</span>
-            <span class="muted">CodeMirror</span>
+          <div class="editor-tabs" role="tablist" aria-label="Open files">
+            <For each={documents}>
+              {(document) => (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeDocId() === document.id}
+                  onClick={() => setActiveDocId(document.id)}
+                >
+                  {document.path}
+                </button>
+              )}
+            </For>
           </div>
-          <CodeEditor value={source()} onChange={setSource} />
+          <For each={documents}>
+            {(document) => (
+              <div hidden={activeDocId() !== document.id}>
+                <CodeEditor
+                  docId={document.id}
+                  value={document.text()}
+                  diagnostics={diagnostics().filter(({ docId }) => docId === document.id)}
+                  cursorTarget={cursorTarget()?.docId === document.id ? cursorTarget() : undefined}
+                  onChange={document.setText}
+                  onDelta={handleEdit}
+                  onCursor={handleCursor}
+                />
+              </div>
+            )}
+          </For>
         </section>
 
         <section class="panel preview-panel">
           <div class="panel-heading">
             <span>HTML Preview</span>
-            <span class="muted">Epoch {session.latestAppliedEpoch}</span>
+            <span class="muted">Epoch {previewEpoch()}</span>
           </div>
-          <IncrementalPreview patch={previewPatch()} />
+          <IncrementalPreview
+            patch={previewPatch()}
+            highlightedElementId={highlightedElementId()}
+            onSourceSpan={handlePreviewSpan}
+          />
         </section>
       </section>
 
@@ -96,8 +199,24 @@ Hello from Umber.
           </ol>
         </div>
         <div>
-          <h2>Compile log</h2>
-          <p>{engineStatus()}</p>
+          <h2>Diagnostics</h2>
+          <Show when={diagnostics().length > 0} fallback={<p>No diagnostics.</p>}>
+            <ul class="diagnostic-list">
+              <For each={diagnostics()}>
+                {(diagnostic) => (
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => jumpToSource(diagnostic.docId, diagnostic.byteStart)}
+                    >
+                      <span class={`diagnostic-${diagnostic.severity}`}>{diagnostic.severity}</span>
+                      {diagnostic.docId}:{diagnostic.byteStart} · {diagnostic.message}
+                    </button>
+                  </li>
+                )}
+              </For>
+            </ul>
+          </Show>
         </div>
       </section>
     </main>

@@ -22,11 +22,23 @@ export const paragraphEditGolden: FromEngine[] = [
     spans: [{ elemId: "span-1", docId: "main", byteStart: 41, byteEnd: 54 }],
     final: false,
   },
-  { t: "diagnostics", epoch: 1, items: [] },
+  {
+    t: "diagnostics",
+    epoch: 1,
+    items: [
+      {
+        severity: "warning",
+        docId: "main",
+        byteStart: 41,
+        byteEnd: 54,
+        message: "Fake engine source-span check",
+      },
+    ],
+  },
   { t: "progress", epoch: 1, phase: "idle" },
 ];
 
 export const paragraphEditReplay: FakeEngineStep[] = [
   { afterMessage: "init", emit: paragraphEditGolden[0] },
-  ...paragraphEditGolden.slice(1).map((emit) => ({ afterMessage: "edit" as const, emit })),
+  ...paragraphEditGolden.slice(1).map((emit) => ({ afterMessage: "openProject" as const, emit })),
 ];
