@@ -3,8 +3,8 @@ import { expect, test } from "@playwright/test";
 test("renders the app shell", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "Local LaTeX workspace" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "New Project" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Umber Browser-native TeX" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copy into a project" })).toBeVisible();
   await expect(page.getByText("HTML Preview")).toBeVisible();
   const previewSpan = page.locator("#span-1");
   await expect(previewSpan).toHaveText("Hello, Umber.");
@@ -32,4 +32,20 @@ test("preserves independent editor documents while switching tabs", async ({ pag
   await expect(visibleEditor()).toContainText("% main note");
   await page.getByRole("tab", { name: "references.bib" }).click();
   await expect(visibleEditor()).toContainText("% bib note");
+});
+
+test("copies the demo into OPFS and persists edits across reload", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Copy into a project" }).click();
+  await expect(page).toHaveURL(/#\/project\//);
+  const editor = page.locator('[role="textbox"]:visible');
+  await editor.focus();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.type("% persisted note");
+  await page.waitForTimeout(650);
+
+  await page.reload();
+  await expect(page.locator('[role="textbox"]:visible')).toContainText("% persisted note");
+  await page.getByRole("button", { name: "Projects" }).click();
+  await expect(page.getByRole("button", { name: /Umber demo/ })).toBeVisible();
 });

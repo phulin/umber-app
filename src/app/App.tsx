@@ -1,224 +1,242 @@
-import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
-import { CodeEditor, type EditorCursor, type EditorDelta } from "../features/editor/CodeEditor";
-import { Utf8OffsetMap } from "../features/editor/utf8OffsetMap";
-import { IncrementalPreview } from "../features/preview/IncrementalPreview";
-import type { PatchMessage } from "../features/preview/previewDocument";
-import { SpanIndex } from "../features/sync/spanIndex";
-import { paragraphEditReplay } from "../features/tex-compile/__fixtures__/paragraph-edit";
-import { CompileOrchestrator } from "../features/tex-compile/compileOrchestrator";
-import { FakeEngineTransport } from "../features/tex-compile/engineTransport";
-import type { Diagnostic, SourceSpan } from "../features/tex-compile/protocol";
+import { createResource, createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js";
+import { importProjectFiles, importProjectZip } from "../features/projects/projectArchive";
+import { ProjectLockLease } from "../features/projects/projectLock";
+import {
+  MemoryProjectStore,
+  OpfsProjectStore,
+  type ProjectStore,
+} from "../features/projects/projectStore";
+import { Workspace, type WorkspaceDocument } from "./Workspace";
 
-const milestones = [
-  "Lock engine protocol",
-  "Render incremental HTML",
-  "Cache TeX resources in OPFS",
-  "Synchronize source and preview",
-  "Persist and export projects",
-  "Validate launch performance",
-];
-
-const initialMain = String.raw`\documentclass{article}
+const demoDocuments: WorkspaceDocument[] = [
+  {
+    id: "main",
+    path: "main.tex",
+    text: String.raw`\documentclass{article}
 \begin{document}
 Hello, Umber.
-\end{document}`;
-
-const initialBibliography = `@book{umber,
+\end{document}`,
+  },
+  {
+    id: "references",
+    path: "references.bib",
+    text: `@book{umber,
   title = {Browser-Native TeX},
   year = {2026}
-}`;
+}`,
+  },
+];
+
+type Route = { screen: "demo" } | { screen: "projects" } | { screen: "project"; id: string };
+
+const parseRoute = (): Route => {
+  const path = window.location.hash.replace(/^#/, "") || "/demo";
+  const project = path.match(/^\/project\/([^/]+)$/);
+  if (project?.[1]) return { screen: "project", id: decodeURIComponent(project[1]) };
+  if (path === "/projects") return { screen: "projects" };
+  return { screen: "demo" };
+};
+
+const navigate = (path: string) => {
+  window.location.hash = path;
+};
+
+async function createStore(): Promise<ProjectStore> {
+  try {
+    return await OpfsProjectStore.create();
+  } catch {
+    return new MemoryProjectStore();
+  }
+}
+
+function ProjectList(props: { store: ProjectStore }) {
+  const [projects, { refetch }] = createResource(() => props.store.listProjects());
+  let zipInput: HTMLInputElement | undefined;
+  let folderInput: HTMLInputElement | undefined;
+
+  const importFiles = async (files: FileList | readonly File[]) => {
+    const selected = [...files];
+    if (selected.length === 1 && selected[0]?.name.toLowerCase().endsWith(".zip")) {
+      const file = selected[0];
+      if (!file) return;
+      const project = await importProjectZip(props.store, new Uint8Array(await file.arrayBuffer()));
+      navigate(`/project/${project.id}`);
+      return;
+    }
+    const project = await importProjectFiles(props.store, selected);
+    navigate(`/project/${project.id}`);
+  };
+
+  return (
+    <section
+      class="project-list-screen"
+      aria-label="Project import and list"
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => {
+        event.preventDefault();
+        if (event.dataTransfer) void importFiles(event.dataTransfer.files);
+      }}
+    >
+      <div class="screen-heading">
+        <div>
+          <p class="eyebrow">Local-first</p>
+          <h2>Your projects</h2>
+        </div>
+        <div class="workspace-actions">
+          <button type="button" onClick={() => navigate("/demo")}>
+            New from demo
+          </button>
+          <button type="button" onClick={() => zipInput?.click()}>
+            Import ZIP
+          </button>
+          <button type="button" onClick={() => folderInput?.click()}>
+            Import folder
+          </button>
+          <input
+            ref={(element) => {
+              zipInput = element;
+            }}
+            class="visually-hidden"
+            type="file"
+            accept=".zip,application/zip"
+            onChange={(event) => {
+              if (event.currentTarget.files) void importFiles(event.currentTarget.files);
+            }}
+          />
+          <input
+            ref={(element) => {
+              folderInput = element;
+              element.setAttribute("webkitdirectory", "");
+            }}
+            class="visually-hidden"
+            type="file"
+            multiple
+            onChange={(event) => {
+              if (event.currentTarget.files) void importFiles(event.currentTarget.files);
+            }}
+          />
+        </div>
+      </div>
+      <p class="drop-hint">Drop a project folder or ZIP anywhere on this panel.</p>
+      <Show when={(projects() ?? []).length > 0} fallback={<p>No saved projects yet.</p>}>
+        <div class="project-cards">
+          {projects()?.map((project) => (
+            <button type="button" onClick={() => navigate(`/project/${project.id}`)}>
+              <strong>{project.name}</strong>
+              <span>{project.entry}</span>
+              <time>{new Date(project.updatedAt).toLocaleString()}</time>
+            </button>
+          ))}
+        </div>
+      </Show>
+      <button class="refresh-projects" type="button" onClick={() => void refetch()}>
+        Refresh projects
+      </button>
+    </section>
+  );
+}
+
+function ProjectScreen(props: { store: ProjectStore; id: string }) {
+  let lease: ProjectLockLease | undefined;
+  const [project] = createResource(
+    () => props.id,
+    async (id) => {
+      await lease?.release();
+      const manifest = await props.store.getManifest(id);
+      if (!manifest) throw new Error(`Project not found: ${id}`);
+      lease = await ProjectLockLease.acquire(id);
+      const documents: WorkspaceDocument[] = [];
+      for (const path of manifest.files.filter((file) =>
+        /\.(tex|bib|sty|cls|md|txt)$/i.test(file),
+      )) {
+        documents.push({
+          id: path,
+          path,
+          text: new TextDecoder().decode(await props.store.readFile(id, path)),
+        });
+      }
+      return { manifest, documents, readOnly: !lease.writable };
+    },
+  );
+  onCleanup(() => void lease?.release());
+
+  return (
+    <Show when={project()} fallback={<p class="loading-state">Loading project…</p>}>
+      {(loaded) => (
+        <Workspace
+          name={loaded().manifest.name}
+          documents={loaded().documents}
+          entry={loaded().manifest.entry}
+          readOnly={loaded().readOnly}
+          project={{ id: loaded().manifest.id, store: props.store }}
+        />
+      )}
+    </Show>
+  );
+}
 
 export function App() {
-  const [mainSource, setMainSource] = createSignal(initialMain);
-  const [bibliography, setBibliography] = createSignal(initialBibliography);
-  const documents = [
-    { id: "main", path: "main.tex", text: mainSource, setText: setMainSource },
-    { id: "references", path: "references.bib", text: bibliography, setText: setBibliography },
-  ];
-  const [activeDocId, setActiveDocId] = createSignal("main");
-  const [engineStatus, setEngineStatus] = createSignal("Starting fake engine…");
-  const [previewPatch, setPreviewPatch] = createSignal<PatchMessage>();
-  const [previewEpoch, setPreviewEpoch] = createSignal(0);
-  const [diagnostics, setDiagnostics] = createSignal<Diagnostic[]>([]);
-  const [diagnosticEpoch, setDiagnosticEpoch] = createSignal(0);
-  const [highlightedElementId, setHighlightedElementId] = createSignal<string>();
-  const [cursorTarget, setCursorTarget] = createSignal<{
-    docId: string;
-    offset: number;
-    requestId: number;
-  }>();
-  const spans = new SpanIndex();
-  const orchestrator = new CompileOrchestrator(new FakeEngineTransport(paragraphEditReplay));
-  let cursorRequestId = 0;
-
-  const jumpToSource = (docId: string, byteOffset: number) => {
-    const document = documents.find(({ id }) => id === docId);
-    if (!document) return;
-    const offsets = new Utf8OffsetMap(document.text());
-    const utf16Offset = offsets.byteToUtf16(Math.min(byteOffset, offsets.byteLength));
-    setActiveDocId(docId);
-    setCursorTarget({ docId, offset: utf16Offset, requestId: ++cursorRequestId });
-  };
-
-  const handleCursor = (cursor: EditorCursor) => {
-    const span = spans.innermost(cursor.docId, cursor.byteOffset);
-    setHighlightedElementId(span?.elemId);
-  };
-
-  const handlePreviewSpan = (span: SourceSpan) => jumpToSource(span.docId, span.byteStart);
-  const handleEdit = (delta: EditorDelta) => orchestrator.submitEdit(delta);
+  const [route, setRoute] = createSignal<Route>(parseRoute());
+  const [store] = createResource(createStore);
 
   onMount(() => {
-    const unsubscribe = orchestrator.subscribe((message) => {
-      if (message.t === "ready") setEngineStatus(`Ready · ${message.engineVersion}`);
-      if (message.t === "progress") {
-        setEngineStatus(message.detail ? `${message.phase} · ${message.detail}` : message.phase);
-      }
-      if (message.t === "saturated") {
-        setEngineStatus(`Compiling · ${message.queuedDeltas} edits queued`);
-      }
-      if (message.t === "patch") {
-        setPreviewPatch(message);
-        setPreviewEpoch(message.epoch);
-        spans.apply(message.epoch, message.spans);
-      }
-      if (message.t === "diagnostics" && message.epoch >= diagnosticEpoch()) {
-        setDiagnosticEpoch(message.epoch);
-        setDiagnostics(message.items);
-      }
-      if (message.t === "fatal") setEngineStatus(`Engine restarting · ${message.message}`);
-    });
-
-    orchestrator.initialize(
-      { t: "init", bundleDigest: "demo-bundle", engineOpts: { mode: "fake" } },
-      {
-        entry: "main.tex",
-        files: documents.map((document) => ({
-          docId: document.id,
-          path: document.path,
-          bytes: new TextEncoder().encode(document.text()).buffer,
-        })),
-      },
-    );
-    onCleanup(unsubscribe);
+    const updateRoute = () => setRoute(parseRoute());
+    window.addEventListener("hashchange", updateRoute);
+    if (!window.location.hash) navigate("/demo");
+    onCleanup(() => window.removeEventListener("hashchange", updateRoute));
   });
 
-  onCleanup(() => orchestrator.dispose());
+  const copyDemo = async (projectStore: ProjectStore) => {
+    const project = await projectStore.createProject({
+      name: "Umber demo",
+      entry: "main.tex",
+      files: Object.fromEntries(
+        demoDocuments.map((document) => [document.path, new TextEncoder().encode(document.text)]),
+      ),
+    });
+    navigate(`/project/${project.id}`);
+  };
 
   return (
     <main class="app-shell">
       <header class="topbar">
-        <div>
-          <p class="eyebrow">Umber</p>
-          <h1>Local LaTeX workspace</h1>
-        </div>
-        <button class="primary-action" type="button">
-          New Project
+        <button class="brand-button" type="button" onClick={() => navigate("/demo")}>
+          <span class="eyebrow">Umber</span>
+          <span class="brand-title">Browser-native TeX</span>
         </button>
+        <nav aria-label="Primary navigation">
+          <button type="button" onClick={() => navigate("/demo")}>
+            Demo
+          </button>
+          <button type="button" onClick={() => navigate("/projects")}>
+            Projects
+          </button>
+        </nav>
       </header>
 
-      <section class="compile-activity" role="status" aria-live="polite">
-        <span class="activity-dot" aria-hidden="true" />
-        <span>{engineStatus()}</span>
-      </section>
-
-      <section class="workspace-grid" aria-label="Workspace preview">
-        <aside class="panel file-tree">
-          <div class="panel-heading">
-            <span>Project</span>
-            <span class="muted">Demo project</span>
-          </div>
-          <ul>
-            <For each={documents}>
-              {(document) => (
-                <li>
-                  <button
-                    type="button"
-                    classList={{ active: activeDocId() === document.id }}
-                    onClick={() => setActiveDocId(document.id)}
-                  >
-                    {document.path}
-                  </button>
-                </li>
-              )}
-            </For>
-            <li class="folder-label">figures/</li>
-          </ul>
-        </aside>
-
-        <section class="panel editor-panel">
-          <div class="editor-tabs" role="tablist" aria-label="Open files">
-            <For each={documents}>
-              {(document) => (
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={activeDocId() === document.id}
-                  onClick={() => setActiveDocId(document.id)}
-                >
-                  {document.path}
-                </button>
-              )}
-            </For>
-          </div>
-          <For each={documents}>
-            {(document) => (
-              <div hidden={activeDocId() !== document.id}>
-                <CodeEditor
-                  docId={document.id}
-                  value={document.text()}
-                  diagnostics={diagnostics().filter(({ docId }) => docId === document.id)}
-                  cursorTarget={cursorTarget()?.docId === document.id ? cursorTarget() : undefined}
-                  onChange={document.setText}
-                  onDelta={handleEdit}
-                  onCursor={handleCursor}
-                />
-              </div>
-            )}
-          </For>
-        </section>
-
-        <section class="panel preview-panel">
-          <div class="panel-heading">
-            <span>HTML Preview</span>
-            <span class="muted">Epoch {previewEpoch()}</span>
-          </div>
-          <IncrementalPreview
-            patch={previewPatch()}
-            highlightedElementId={highlightedElementId()}
-            onSourceSpan={handlePreviewSpan}
-          />
-        </section>
-      </section>
-
-      <section class="bottom-panel">
-        <div>
-          <h2>MVP path</h2>
-          <ol>
-            <For each={milestones}>{(milestone) => <li>{milestone}</li>}</For>
-          </ol>
-        </div>
-        <div>
-          <h2>Diagnostics</h2>
-          <Show when={diagnostics().length > 0} fallback={<p>No diagnostics.</p>}>
-            <ul class="diagnostic-list">
-              <For each={diagnostics()}>
-                {(diagnostic) => (
-                  <li>
-                    <button
-                      type="button"
-                      onClick={() => jumpToSource(diagnostic.docId, diagnostic.byteStart)}
-                    >
-                      <span class={`diagnostic-${diagnostic.severity}`}>{diagnostic.severity}</span>
-                      {diagnostic.docId}:{diagnostic.byteStart} · {diagnostic.message}
-                    </button>
-                  </li>
-                )}
-              </For>
-            </ul>
-          </Show>
-        </div>
-      </section>
+      <Show when={store()} fallback={<p class="loading-state">Opening local project storage…</p>}>
+        {(projectStore) => (
+          <Switch>
+            <Match when={route().screen === "projects"}>
+              <ProjectList store={projectStore()} />
+            </Match>
+            <Match when={route().screen === "project"}>
+              <ProjectScreen
+                store={projectStore()}
+                id={(route() as Extract<Route, { screen: "project" }>).id}
+              />
+            </Match>
+            <Match when={route().screen === "demo"}>
+              <Workspace
+                name="Try Umber"
+                documents={demoDocuments}
+                entry="main.tex"
+                onCopyDemo={() => copyDemo(projectStore())}
+              />
+            </Match>
+          </Switch>
+        )}
+      </Show>
     </main>
   );
 }

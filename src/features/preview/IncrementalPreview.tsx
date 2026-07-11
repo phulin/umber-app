@@ -8,6 +8,7 @@ type IncrementalPreviewProps = {
   overscanPages?: number;
   highlightedElementId?: string;
   onSourceSpan?: (span: SourceSpan) => void;
+  onPatchApplied?: (result: { epoch: number; durationMs: number }) => void;
 };
 
 type Anchor = { pageId: string; top: number };
@@ -89,6 +90,7 @@ export function IncrementalPreview(props: IncrementalPreviewProps) {
 
   const flushPatches = () => {
     frameHandle = undefined;
+    const startedAt = performance.now();
     const anchor = captureAnchor();
     let changed = false;
     for (const patch of queuedPatches.splice(0)) {
@@ -100,6 +102,7 @@ export function IncrementalPreview(props: IncrementalPreviewProps) {
       frameHandle = undefined;
       restoreAnchor(anchor);
       updateVisibleRange();
+      props.onPatchApplied?.({ epoch: model.epoch, durationMs: performance.now() - startedAt });
     });
   };
 

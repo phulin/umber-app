@@ -1,0 +1,285 @@
+import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { CodeEditor, type EditorCursor, type EditorDelta } from "../features/editor/CodeEditor";
+import { Utf8OffsetMap } from "../features/editor/utf8OffsetMap";
+import {
+  type LatencySummary,
+  PerformanceMonitor,
+} from "../features/performance/performanceMonitor";
+import { IncrementalPreview } from "../features/preview/IncrementalPreview";
+import type { PatchMessage } from "../features/preview/previewDocument";
+import { ProjectAutosave } from "../features/projects/autosave";
+import { exportProjectZip } from "../features/projects/projectArchive";
+import type { ProjectStore } from "../features/projects/projectStore";
+import { SpanIndex } from "../features/sync/spanIndex";
+import { paragraphEditReplay } from "../features/tex-compile/__fixtures__/paragraph-edit";
+import { CompileOrchestrator } from "../features/tex-compile/compileOrchestrator";
+import { FakeEngineTransport } from "../features/tex-compile/engineTransport";
+import type { Diagnostic, SourceSpan } from "../features/tex-compile/protocol";
+
+export type WorkspaceDocument = { id: string; path: string; text: string };
+
+type WorkspaceProps = {
+  name: string;
+  documents: readonly WorkspaceDocument[];
+  entry: string;
+  readOnly?: boolean;
+  project?: { id: string; store: ProjectStore };
+  onCopyDemo?: () => void | Promise<void>;
+};
+
+export function Workspace(props: WorkspaceProps) {
+  const documents = props.documents.map((document) => {
+    const [text, setText] = createSignal(document.text);
+    return { ...document, text, setText };
+  });
+  const entryDocument = documents.find(({ path }) => path === props.entry) ?? documents[0];
+  const [activeDocId, setActiveDocId] = createSignal(entryDocument?.id ?? "");
+  const [engineStatus, setEngineStatus] = createSignal("Starting fake engine…");
+  const [previewPatch, setPreviewPatch] = createSignal<PatchMessage>();
+  const [previewEpoch, setPreviewEpoch] = createSignal(0);
+  const [diagnostics, setDiagnostics] = createSignal<Diagnostic[]>([]);
+  const [diagnosticEpoch, setDiagnosticEpoch] = createSignal(0);
+  const [highlightedElementId, setHighlightedElementId] = createSignal<string>();
+  const [latency, setLatency] = createSignal<LatencySummary>({ samples: 0 });
+  const [cursorTarget, setCursorTarget] = createSignal<{
+    docId: string;
+    offset: number;
+    requestId: number;
+  }>();
+  const spans = new SpanIndex();
+  const performanceMonitor = new PerformanceMonitor();
+  const orchestrator = new CompileOrchestrator(new FakeEngineTransport(paragraphEditReplay));
+  let autosave: ProjectAutosave | undefined;
+  let detachLifecycle: (() => void) | undefined;
+  let cursorRequestId = 0;
+
+  const jumpToSource = (docId: string, byteOffset: number) => {
+    const document = documents.find(({ id }) => id === docId);
+    if (!document) return;
+    const offsets = new Utf8OffsetMap(document.text());
+    const utf16Offset = offsets.byteToUtf16(Math.min(byteOffset, offsets.byteLength));
+    setActiveDocId(docId);
+    setCursorTarget({ docId, offset: utf16Offset, requestId: ++cursorRequestId });
+  };
+
+  const handleCursor = (cursor: EditorCursor) => {
+    const span = spans.innermost(cursor.docId, cursor.byteOffset);
+    setHighlightedElementId(span?.elemId);
+  };
+
+  const handleEdit = (delta: EditorDelta) => {
+    performanceMonitor.beginEdit();
+    orchestrator.submitEdit(delta);
+  };
+
+  const saveDocument = (document: (typeof documents)[number], value: string) => {
+    document.setText(value);
+    if (!props.readOnly) autosave?.schedule(document.path, new TextEncoder().encode(value));
+  };
+
+  const downloadProject = async () => {
+    if (!props.project) return;
+    await autosave?.flush();
+    const archive = await exportProjectZip(props.project.store, props.project.id);
+    const blob = new Blob([archive.slice().buffer], { type: "application/zip" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${props.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "project"}.zip`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  onMount(() => {
+    if (props.project && !props.readOnly) {
+      autosave = new ProjectAutosave(props.project.store, props.project.id);
+      detachLifecycle = autosave.attachLifecycle();
+    }
+    const unsubscribe = orchestrator.subscribe((message) => {
+      if (message.t === "ready") setEngineStatus(`Ready · ${message.engineVersion}`);
+      if (message.t === "progress") {
+        setEngineStatus(message.detail ? `${message.phase} · ${message.detail}` : message.phase);
+      }
+      if (message.t === "saturated") {
+        setEngineStatus(`Compiling · ${message.queuedDeltas} edits queued`);
+      }
+      if (message.t === "patch") {
+        setPreviewPatch(message);
+        setPreviewEpoch(message.epoch);
+        spans.apply(message.epoch, message.spans);
+      }
+      if (message.t === "diagnostics" && message.epoch >= diagnosticEpoch()) {
+        setDiagnosticEpoch(message.epoch);
+        setDiagnostics(message.items);
+      }
+      if (message.t === "fatal") setEngineStatus(`Engine restarting · ${message.message}`);
+    });
+
+    orchestrator.initialize(
+      { t: "init", bundleDigest: "demo-bundle", engineOpts: { mode: "fake" } },
+      {
+        entry: props.entry,
+        files: documents.map((document) => ({
+          docId: document.id,
+          path: document.path,
+          bytes: new TextEncoder().encode(document.text()).buffer,
+        })),
+      },
+    );
+    onCleanup(unsubscribe);
+  });
+
+  onCleanup(() => {
+    detachLifecycle?.();
+    void autosave?.dispose();
+    orchestrator.dispose();
+  });
+
+  return (
+    <>
+      <section class="workspace-toolbar">
+        <div>
+          <span class="muted">Workspace</span>
+          <strong>{props.name}</strong>
+          <Show when={props.readOnly}>
+            <span class="read-only-badge">Read only · open in another tab</span>
+          </Show>
+        </div>
+        <div class="workspace-actions">
+          <Show when={props.onCopyDemo}>
+            <button type="button" onClick={() => void props.onCopyDemo?.()}>
+              Copy into a project
+            </button>
+          </Show>
+          <Show when={props.project}>
+            <button type="button" onClick={() => void downloadProject()}>
+              Download project
+            </button>
+          </Show>
+        </div>
+      </section>
+
+      <section class="compile-activity" role="status" aria-live="polite">
+        <span class="activity-dot" aria-hidden="true" />
+        <span>{engineStatus()}</span>
+      </section>
+
+      <section class="workspace-grid" aria-label="Workspace preview">
+        <aside class="panel file-tree">
+          <div class="panel-heading">
+            <span>Project</span>
+            <span class="muted">{documents.length} files</span>
+          </div>
+          <ul>
+            <For each={documents}>
+              {(document) => (
+                <li>
+                  <button
+                    type="button"
+                    classList={{ active: activeDocId() === document.id }}
+                    onClick={() => setActiveDocId(document.id)}
+                  >
+                    {document.path}
+                  </button>
+                </li>
+              )}
+            </For>
+          </ul>
+        </aside>
+
+        <section class="panel editor-panel">
+          <div class="editor-tabs" role="tablist" aria-label="Open files">
+            <For each={documents}>
+              {(document) => (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeDocId() === document.id}
+                  onClick={() => setActiveDocId(document.id)}
+                >
+                  {document.path}
+                </button>
+              )}
+            </For>
+          </div>
+          <For each={documents}>
+            {(document) => (
+              <div hidden={activeDocId() !== document.id}>
+                <CodeEditor
+                  docId={document.id}
+                  value={document.text()}
+                  readOnly={props.readOnly}
+                  diagnostics={diagnostics().filter(({ docId }) => docId === document.id)}
+                  cursorTarget={cursorTarget()?.docId === document.id ? cursorTarget() : undefined}
+                  onChange={(value) => saveDocument(document, value)}
+                  onDelta={handleEdit}
+                  onCursor={handleCursor}
+                />
+              </div>
+            )}
+          </For>
+        </section>
+
+        <section class="panel preview-panel">
+          <div class="panel-heading">
+            <span>HTML Preview</span>
+            <span class="muted">Epoch {previewEpoch()}</span>
+          </div>
+          <IncrementalPreview
+            patch={previewPatch()}
+            highlightedElementId={highlightedElementId()}
+            onSourceSpan={(span: SourceSpan) => jumpToSource(span.docId, span.byteStart)}
+            onPatchApplied={({ epoch, durationMs }) => {
+              performanceMonitor.patchApplied(epoch, durationMs);
+              setLatency(performanceMonitor.summary());
+            }}
+          />
+        </section>
+      </section>
+
+      <section class="bottom-panel">
+        <div>
+          <h2>Performance</h2>
+          <dl class="performance-grid">
+            <div>
+              <dt>Samples</dt>
+              <dd>{latency().samples}</dd>
+            </div>
+            <div>
+              <dt>Edit → patch p50</dt>
+              <dd>{latency().p50EditToPatchMs?.toFixed(1) ?? "—"} ms</dd>
+            </div>
+            <div>
+              <dt>Edit → patch p95</dt>
+              <dd>{latency().p95EditToPatchMs?.toFixed(1) ?? "—"} ms</dd>
+            </div>
+            <div>
+              <dt>Latest patch</dt>
+              <dd>{latency().latestPatchApplicationMs?.toFixed(1) ?? "—"} ms</dd>
+            </div>
+          </dl>
+        </div>
+        <div>
+          <h2>Diagnostics</h2>
+          <Show when={diagnostics().length > 0} fallback={<p>No diagnostics.</p>}>
+            <ul class="diagnostic-list">
+              <For each={diagnostics()}>
+                {(diagnostic) => (
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => jumpToSource(diagnostic.docId, diagnostic.byteStart)}
+                    >
+                      <span class={`diagnostic-${diagnostic.severity}`}>{diagnostic.severity}</span>
+                      {diagnostic.docId}:{diagnostic.byteStart} · {diagnostic.message}
+                    </button>
+                  </li>
+                )}
+              </For>
+            </ul>
+          </Show>
+        </div>
+      </section>
+    </>
+  );
+}

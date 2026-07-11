@@ -36,6 +36,39 @@ button {
   padding-bottom: 20px;
 }
 
+.brand-button {
+  display: grid;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+
+.brand-title {
+  font-size: 1.3rem;
+  font-weight: 750;
+}
+
+.topbar nav,
+.workspace-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.topbar nav button,
+.workspace-actions button,
+.refresh-projects {
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid #cfc7bb;
+  border-radius: 6px;
+  color: #3e3a35;
+  background: #fffdf8;
+  font-weight: 650;
+}
+
 .eyebrow {
   margin: 0 0 4px;
   color: #7f4b2a;
@@ -74,6 +107,30 @@ h2 {
 .primary-action:disabled {
   cursor: not-allowed;
   background: #9aa09f;
+}
+
+.workspace-toolbar,
+.screen-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.workspace-toolbar > div:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.read-only-badge {
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: #8b5215;
+  background: #fff2d8;
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 
 .compile-activity {
@@ -304,12 +361,100 @@ h2 {
   color: #9a5c17;
 }
 
+.performance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.performance-grid div {
+  padding: 8px;
+  border-radius: 5px;
+  background: #f4f1ea;
+}
+
+.performance-grid dt {
+  color: #77716a;
+  font-size: 0.74rem;
+}
+
+.performance-grid dd {
+  margin: 3px 0 0;
+  font-weight: 700;
+}
+
+.project-list-screen {
+  min-height: 540px;
+  padding: 24px;
+  border: 1px solid #d8d1c6;
+  border-radius: 8px;
+  background: #fffdf8;
+}
+
+.screen-heading h2 {
+  margin-bottom: 0;
+  font-size: 1.5rem;
+}
+
+.drop-hint {
+  padding: 18px;
+  border: 1px dashed #b9aa98;
+  border-radius: 6px;
+  color: #6e655b;
+  text-align: center;
+}
+
+.project-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.project-cards button {
+  display: grid;
+  gap: 8px;
+  min-height: 120px;
+  padding: 16px;
+  border: 1px solid #d8d1c6;
+  border-radius: 7px;
+  color: inherit;
+  background: white;
+  text-align: left;
+}
+
+.project-cards span,
+.project-cards time {
+  color: #77716a;
+  font-size: 0.8rem;
+}
+
+.loading-state {
+  padding: 48px;
+  color: #77716a;
+  text-align: center;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 @media (max-width: 900px) {
   .app-shell {
     padding: 16px;
   }
 
   .topbar,
+  .workspace-toolbar,
+  .screen-heading,
   .bottom-panel {
     align-items: stretch;
     grid-template-columns: 1fr;
@@ -317,6 +462,11 @@ h2 {
 
   .topbar {
     flex-direction: column;
+  }
+
+  .topbar nav,
+  .workspace-actions {
+    flex-wrap: wrap;
   }
 
   .workspace-grid {

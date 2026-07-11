@@ -11,13 +11,15 @@ afterEach(() => {
 });
 
 describe("App", () => {
-  it("renders the workspace shell", () => {
+  it("renders the demo workspace shell", async () => {
     const root = document.createElement("div");
     document.body.append(root);
 
     dispose = render(() => <App />, root);
 
-    expect(root.querySelector("h1")?.textContent).toBe("Local LaTeX workspace");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(root.textContent).toContain("Browser-native TeX");
     expect(root.textContent).toContain("HTML Preview");
   });
 });
