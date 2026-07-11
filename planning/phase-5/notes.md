@@ -28,3 +28,4 @@
 - `ProjectScreen` filtered the manifest to editable extensions before loading files. This correctly avoided opening binaries in CodeMirror but also removed images/fonts/data from the engine project payload.
 - Remediation keeps editable document signals separate from immutable binary resources, lists both in the tree, and includes both in `openProject` transferables.
 - Verification imports a ZIP with a PNG payload in Chromium, shows the resource with a binary badge and no tab, while a unit test proves `workspaceProjectFiles` preserves exact bytes in the engine payload.
+- Follow-up: the orchestrator now receives an explicit editable-document ID set, so it transfers binaries but does not UTF-8 decode or retain duplicate text state for them. A test proves binary edit attempts are rejected while the bytes remain in `openProject`.

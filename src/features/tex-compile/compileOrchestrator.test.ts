@@ -77,4 +77,34 @@ describe("CompileOrchestrator", () => {
     expect(transport.received.at(-1)).toMatchObject({ t: "edit", epoch: 1 });
     orchestrator.dispose();
   });
+
+  it("transfers binary resources without decoding them into editable state", () => {
+    const transport = new FakeEngineTransport();
+    const orchestrator = new CompileOrchestrator(transport);
+    const binary = new Uint8Array([0xff, 0xfe, 0xfd]).buffer;
+    orchestrator.initialize(
+      { t: "init", bundleDigest: "bundle", engineOpts: {} },
+      {
+        entry: "main.tex",
+        editableDocIds: new Set(["main"]),
+        files: [
+          { docId: "main", path: "main.tex", bytes: new TextEncoder().encode("main").buffer },
+          { docId: "plot", path: "plot.png", bytes: binary },
+        ],
+      },
+    );
+
+    expect(transport.received[1]).toMatchObject({ t: "openProject" });
+    expect(() =>
+      orchestrator.submitEdit({
+        docId: "plot",
+        fromUtf16: 0,
+        toUtf16: 0,
+        fromByte: 0,
+        toByte: 0,
+        insertedText: "x",
+      }),
+    ).toThrow("Unknown document: plot");
+    orchestrator.dispose();
+  });
 });

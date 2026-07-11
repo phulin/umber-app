@@ -35,10 +35,11 @@ export class CompileOrchestrator {
 
   initialize(
     init: Extract<ToEngine, { t: "init" }>,
-    project: { files: ProjectFile[]; entry: string },
+    project: { files: ProjectFile[]; entry: string; editableDocIds?: ReadonlySet<string> },
   ): void {
     const decoder = new TextDecoder();
     for (const file of project.files) {
+      if (project.editableDocIds && !project.editableDocIds.has(file.docId)) continue;
       const text = decoder.decode(file.bytes);
       this.#documents.set(file.docId, { engineText: text, localText: text });
     }

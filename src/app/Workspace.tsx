@@ -176,6 +176,7 @@ export function Workspace(props: WorkspaceProps) {
       },
       {
         entry: props.entry,
+        editableDocIds: new Set(documents.map((document) => document.id)),
         files: workspaceProjectFiles(
           documents.map((document) => ({
             id: document.id,
