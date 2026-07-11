@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
+use std::process::Command;
+use tempfile::tempdir;
 use walkdir::WalkDir;
 
 #[derive(Debug, Default, Deserialize)]
@@ -28,6 +30,58 @@ pub struct BuildResult {
     pub manifest_path: PathBuf,
     pub object_count: usize,
     pub file_count: usize,
+}
+
+pub fn build_bundle_from_input(
+    input: &Path,
+    output: &Path,
+    policy: &BundlePolicy,
+) -> Result<BuildResult> {
+    if input.is_dir() {
+        return build_bundle(input, output, policy);
+    }
+    if !input.is_file() {
+        bail!("bundle input does not exist: {}", input.display());
+    }
+
+    let listing = Command::new("tar")
+        .arg("-tf")
+        .arg(input)
+        .output()
+        .context("list snapshot tarball with system tar")?;
+    if !listing.status.success() {
+        bail!(
+            "tarball listing failed: {}",
+            String::from_utf8_lossy(&listing.stderr).trim()
+        );
+    }
+    for entry in String::from_utf8(listing.stdout)
+        .context("tar listing is not UTF-8")?
+        .lines()
+    {
+        if Path::new(entry).components().any(|component| {
+            matches!(
+                component,
+                Component::ParentDir | Component::RootDir | Component::Prefix(_)
+            )
+        }) {
+            bail!("tarball contains unsafe path: {entry}");
+        }
+    }
+
+    let extracted = tempdir().context("create tarball extraction directory")?;
+    let status = Command::new("tar")
+        .arg("-xf")
+        .arg(input)
+        .arg("-C")
+        .arg(extracted.path())
+        .status()
+        .context("extract snapshot tarball with system tar")?;
+    if !status.success() {
+        bail!("tarball extraction failed with status {status}");
+    }
+    let root = collapse_single_directory_root(extracted.path())?;
+    build_bundle(&root, output, policy)
 }
 
 pub fn build_bundle(input: &Path, output: &Path, policy: &BundlePolicy) -> Result<BuildResult> {
@@ -105,6 +159,19 @@ fn select_files(input: &Path, policy: &BundlePolicy) -> Result<Vec<PathBuf>> {
     }
     files.sort_by_key(|path| normalize(path));
     Ok(files)
+}
+
+fn collapse_single_directory_root(root: &Path) -> Result<PathBuf> {
+    let mut current = root.to_path_buf();
+    loop {
+        let entries = fs::read_dir(&current)
+            .with_context(|| format!("read extracted directory {}", current.display()))?
+            .collect::<std::io::Result<Vec<_>>>()?;
+        if entries.len() != 1 || !entries[0].file_type()?.is_dir() {
+            return Ok(current);
+        }
+        current = entries[0].path();
+    }
 }
 
 fn resolve_flat_names(
@@ -206,6 +273,39 @@ mod tests {
             .insert("shared.sty".to_owned(), "two/shared.sty".to_owned());
         let result = build_bundle(input.path(), output.path(), &policy)?;
         assert_eq!(result.file_count, 1);
+        Ok(())
+    }
+
+    #[test]
+    fn tarball_and_directory_inputs_produce_identical_bundles() -> Result<()> {
+        let input = tempdir()?;
+        fs::create_dir_all(input.path().join("snapshot/tex"))?;
+        fs::write(input.path().join("snapshot/tex/plain.tex"), b"plain")?;
+        let archive = input.path().join("snapshot.tar");
+        let status = Command::new("tar")
+            .arg("-cf")
+            .arg(&archive)
+            .arg("-C")
+            .arg(input.path())
+            .arg("snapshot")
+            .status()?;
+        assert!(status.success());
+        let directory_output = tempdir()?;
+        let archive_output = tempdir()?;
+
+        let directory = build_bundle_from_input(
+            &input.path().join("snapshot"),
+            directory_output.path(),
+            &BundlePolicy::default(),
+        )?;
+        let archived =
+            build_bundle_from_input(&archive, archive_output.path(), &BundlePolicy::default())?;
+
+        assert_eq!(directory.digest, archived.digest);
+        assert_eq!(
+            fs::read(directory.manifest_path)?,
+            fs::read(archived.manifest_path)?
+        );
         Ok(())
     }
 }

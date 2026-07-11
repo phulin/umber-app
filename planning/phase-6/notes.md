@@ -25,3 +25,7 @@
 - HTTPS deployment endpoint for CORS/cache verification.
 - Representative 30-page performance corpus for the live p50/p95, cold compile, memory, and selection audit.
 - A locally discovered `umber2` WASM design is only proposed and DVI-oriented; `notex` incremental replay is also still planned. Neither supplies the required live HTML-patch engine artifact.
+
+## Completion Audit Reopen
+- §8.1 defines a TeX Live snapshot tarball as pipeline input. The initial Rust CLI accepted only an already-selected directory and documented extraction as external preprocessing, which was narrower than the accepted design.
+- Resolution: validate archive paths with `tar -tf`, extract through system `tar`, deterministically collapse single-directory wrappers, then run the same selection/conflict/hash pipeline. A Rust test proves tar and directory inputs emit identical manifest bytes and digest.
