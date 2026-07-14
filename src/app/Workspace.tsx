@@ -88,6 +88,7 @@ export function Workspace(props: WorkspaceProps) {
     endOffset?: number;
     requestId: number;
   }>();
+  const [previewCaretClearRequestId, setPreviewCaretClearRequestId] = createSignal(0);
   const spans = new SpanIndex();
   const performanceMonitor = new PerformanceMonitor();
   const telemetry = new TelemetryClient();
@@ -349,6 +350,7 @@ export function Workspace(props: WorkspaceProps) {
                 onChange={(value) => saveDocument(document(), value)}
                 onDelta={handleEdit}
                 onCursor={handleCursor}
+                onInteraction={() => setPreviewCaretClearRequestId((requestId) => requestId + 1)}
               />
             )}
           </Show>
@@ -382,6 +384,7 @@ export function Workspace(props: WorkspaceProps) {
                   orchestrator.requestRenderedSource(++renderedSourceRequestId, page, event, unit)
                 }
                 onRenderedSelection={({ start, end }) => requestRenderedSelection(start, end)}
+                clearCaretRequestId={previewCaretClearRequestId()}
               />
             )}
           </Show>

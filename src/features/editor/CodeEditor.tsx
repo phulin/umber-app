@@ -24,6 +24,7 @@ type CodeEditorProps = {
   onChange?: (value: string) => void;
   onDelta?: (delta: EditorDelta) => void;
   onCursor?: (cursor: EditorCursor) => void;
+  onInteraction?: () => void;
 };
 
 const editorTheme = EditorView.theme(
@@ -95,6 +96,14 @@ export function CodeEditor(props: CodeEditorProps) {
   createExtension(syntaxHighlighting(defaultHighlightStyle));
   createExtension(EditorView.lineWrapping);
   createExtension(() => EditorView.editable.of(!readOnly()));
+  createExtension(
+    EditorView.domEventHandlers({
+      mousedown: () => {
+        props.onInteraction?.();
+        return false;
+      },
+    }),
+  );
   createExtension(
     EditorView.updateListener.of((update) => {
       if (update.docChanged) {

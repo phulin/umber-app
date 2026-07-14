@@ -61,6 +61,13 @@ test("clicking a preview character moves the source cursor to that character", a
 
   const editor = page.locator('[role="textbox"]:visible');
   await expect(editor).toBeFocused();
+  await expect(preview.locator(".umber-source-caret")).toBeVisible();
+  await editor.click();
+  await expect(preview.locator(".umber-source-caret")).toHaveCount(0);
+  await editor.evaluate((element) => (element as HTMLElement).blur());
+  await page.mouse.click(frameBox.x + previewPoint.x, frameBox.y + previewPoint.y);
+  await expect(editor).toBeFocused();
+  await expect(preview.locator(".umber-source-caret")).toBeVisible();
   await page.keyboard.insertText("|");
   await expect(editor).toContainText(String.raw`\centerline{A |tiny book about umber}`);
 });
@@ -72,7 +79,7 @@ test("selecting preview text selects the matching source range", async ({ page }
     .locator(".umber-run-text")
     .filter({ hasText: "A tiny book" });
   await expect(title).toBeVisible();
-  await title.evaluate((element) => {
+  const dragFeedback = await title.evaluate((element) => {
     const text = element as SVGTextContentElement;
     const startUnit = text.textContent?.indexOf("tiny") ?? -1;
     const endUnit = startUnit + "tiny".length - 1;
@@ -99,6 +106,15 @@ test("selecting preview text selects the matching source range", async ({ page }
       }),
     );
     text.dispatchEvent(
+      new MouseEvent("mousemove", {
+        bubbles: true,
+        buttons: 1,
+        clientX: endPoint.x,
+        clientY: endPoint.y,
+      }),
+    );
+    const feedback = text.ownerDocument.getSelection()?.toString();
+    text.dispatchEvent(
       new MouseEvent("mouseup", {
         bubbles: true,
         button: 0,
@@ -106,7 +122,9 @@ test("selecting preview text selects the matching source range", async ({ page }
         clientY: endPoint.y,
       }),
     );
+    return feedback;
   });
+  expect(dragFeedback).toBe("tiny");
   await expect
     .poll(() => title.evaluate((element) => element.ownerDocument.getSelection()?.toString()))
     .toBe("tiny");

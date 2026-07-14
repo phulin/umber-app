@@ -36,6 +36,15 @@ function compareHits(left: RenderedPreviewHit, right: RenderedPreviewHit): numbe
   return left.page - right.page || left.event - right.event || (left.unit ?? 0) - (right.unit ?? 0);
 }
 
+function orderedSelection(
+  first: RenderedPreviewHit,
+  second: RenderedPreviewHit,
+): RenderedPreviewSelection {
+  return compareHits(first, second) < 0
+    ? { start: first, end: second }
+    : { start: second, end: first };
+}
+
 function paintSelection(document: Document, { start, end }: RenderedPreviewSelection): void {
   const textAt = (hit: RenderedPreviewHit) =>
     document.querySelector<SVGTextContentElement>(
@@ -54,31 +63,95 @@ function paintSelection(document: Document, { start, end }: RenderedPreviewSelec
   selection?.addRange(range);
 }
 
+function paintCaret(document: Document, hit: RenderedPreviewHit): HTMLDivElement | undefined {
+  if (hit.unit === undefined) return undefined;
+  const text = document.querySelector<SVGTextContentElement>(
+    `[data-umber-page="${hit.page}"] [data-umber-event="${hit.event}"] .umber-run-text`,
+  );
+  const svg = text?.ownerSVGElement;
+  const matrix = text?.getScreenCTM();
+  const view = document.defaultView;
+  if (!text || !svg || !matrix || !view || hit.unit >= text.getNumberOfChars()) return undefined;
+  const extent = text.getExtentOfChar(hit.unit);
+  const top = svg.createSVGPoint();
+  top.x = extent.x;
+  top.y = extent.y;
+  const bottom = svg.createSVGPoint();
+  bottom.x = extent.x;
+  bottom.y = extent.y + extent.height;
+  const clientTop = top.matrixTransform(matrix);
+  const clientBottom = bottom.matrixTransform(matrix);
+  const caret = document.createElement("div");
+  caret.className = "umber-source-caret";
+  caret.setAttribute("aria-hidden", "true");
+  Object.assign(caret.style, {
+    position: "absolute",
+    pointerEvents: "none",
+    zIndex: "2147483647",
+    left: `${clientTop.x + view.scrollX}px`,
+    top: `${Math.min(clientTop.y, clientBottom.y) + view.scrollY}px`,
+    width: "2px",
+    height: `${Math.max(1, Math.abs(clientBottom.y - clientTop.y))}px`,
+    background: "#27615d",
+    boxShadow: "0 0 0 1px rgb(255 253 248 / 65%)",
+  });
+  document.body.append(caret);
+  caret.animate([{ opacity: 1 }, { opacity: 1 }, { opacity: 0 }], {
+    duration: 1200,
+    iterations: Number.POSITIVE_INFINITY,
+    easing: "steps(1, end)",
+  });
+  return caret;
+}
+
 export function StandalonePreview(props: {
   html: ArrayBuffer;
   onRenderedSource?: (hit: RenderedPreviewHit) => void;
   onRenderedSelection?: (selection: RenderedPreviewSelection) => void;
+  clearCaretRequestId?: number;
 }) {
   let iframe: HTMLIFrameElement | undefined;
   let wrapper: HTMLDivElement | undefined;
   let source = "";
   let lastRender = "";
   let detachPreviewClick: (() => void) | undefined;
+  let previewCaret: HTMLDivElement | undefined;
+
+  const clearPreviewCaret = () => {
+    previewCaret?.remove();
+    previewCaret = undefined;
+  };
 
   const attachPreviewClick = () => {
     detachPreviewClick?.();
     const document = iframe?.contentDocument;
     if (!document) return;
+    previewCaret = undefined;
     let dragStart: RenderedPreviewHit | undefined;
     const onClick = (event: MouseEvent) => {
       if (!document.getSelection()?.isCollapsed) return;
       const hit = renderedPreviewHit(event.target, event.clientX, event.clientY);
-      if (hit) props.onRenderedSource?.(hit);
+      if (hit) {
+        clearPreviewCaret();
+        previewCaret = paintCaret(document, hit);
+        props.onRenderedSource?.(hit);
+      }
     };
     const onMouseDown = (event: MouseEvent) => {
       if (event.button !== 0) return;
       dragStart = renderedPreviewHit(event.target, event.clientX, event.clientY);
-      if (dragStart) event.preventDefault();
+      if (dragStart) {
+        clearPreviewCaret();
+        document.getSelection()?.removeAllRanges();
+        event.preventDefault();
+      }
+    };
+    const onMouseMove = (event: MouseEvent) => {
+      if (!dragStart) return;
+      const dragEnd = renderedPreviewHit(event.target, event.clientX, event.clientY);
+      if (!dragEnd || compareHits(dragStart, dragEnd) === 0) return;
+      event.preventDefault();
+      paintSelection(document, orderedSelection(dragStart, dragEnd));
     };
     const onMouseUp = (event: MouseEvent) => {
       const dragEnd = renderedPreviewHit(event.target, event.clientX, event.clientY);
@@ -86,20 +159,19 @@ export function StandalonePreview(props: {
         dragStart = undefined;
         return;
       }
-      const rendered =
-        compareHits(dragStart, dragEnd) < 0
-          ? { start: dragStart, end: dragEnd }
-          : { start: dragEnd, end: dragStart };
+      const rendered = orderedSelection(dragStart, dragEnd);
       dragStart = undefined;
       paintSelection(document, rendered);
       props.onRenderedSelection?.(rendered);
     };
     document.addEventListener("click", onClick);
     document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("mousemove", onMouseMove);
     document.addEventListener("mouseup", onMouseUp);
     detachPreviewClick = () => {
       document.removeEventListener("click", onClick);
       document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUp);
     };
   };
@@ -137,6 +209,11 @@ export function StandalonePreview(props: {
     source = new TextDecoder().decode(props.html);
     lastRender = "";
     render();
+  });
+
+  createEffect(() => {
+    props.clearCaretRequestId;
+    clearPreviewCaret();
   });
 
   return (
