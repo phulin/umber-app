@@ -42,7 +42,8 @@ const editorTheme = EditorView.theme(
       color: "#6e6861",
       borderRightColor: "#d8d1c6",
     },
-    ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "#f1eee7" },
+    ".cm-activeLine": { backgroundColor: "rgba(199, 193, 180, 0.25)" },
+    ".cm-activeLineGutter": { backgroundColor: "#f1eee7" },
     ".cm-tooltip": {
       backgroundColor: "#fffdf8",
       border: "1px solid #bdb5aa",

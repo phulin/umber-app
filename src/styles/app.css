@@ -239,7 +239,11 @@ h2 {
   color: #6e6861;
 }
 
-.code-editor .cm-activeLine,
+.code-editor .cm-activeLine {
+  /* CodeMirror draws selections behind line content, so keep this layer translucent. */
+  background: rgb(199 193 180 / 25%);
+}
+
 .code-editor .cm-activeLineGutter {
   background: #f1eee7;
 }
