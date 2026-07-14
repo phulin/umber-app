@@ -52,6 +52,24 @@ test("recovers from transient TeX errors during rapid editing", async ({ page })
   await expect(page.getByText(/Engine recovery started automatically/)).toHaveCount(0);
 });
 
+test("renders Plain TeX math with scripts, symbols, and extensions", async ({ page }) => {
+  await page.goto("/");
+  const editor = page.locator('[role="textbox"]:visible');
+  const preview = page.frameLocator("iframe.standalone-preview");
+
+  await editor.focus();
+  await page.keyboard.press("Control+A");
+  await page.keyboard.insertText(
+    String.raw`A useful identity: $x^2+y^2=z^2$ and $\alpha\leq\beta$.\par
+$$\sum_{i=1}^{n} i={n(n+1)\over2}.$$\bye`,
+  );
+
+  await expect(preview.locator("body")).toContainText("A useful identity");
+  await expect(preview.locator(".umber-run-text").filter({ hasText: "∑" })).toBeVisible();
+  await expect(preview.locator(".umber-run-text").filter({ hasText: "≤" })).toBeVisible();
+  await expect(page.getByText("No diagnostics.")).toBeVisible();
+});
+
 test("persists demo scratch edits and copies their current state into a project", async ({
   page,
 }) => {
