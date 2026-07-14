@@ -37,6 +37,86 @@ test("shows one editor without file navigation", async ({ page }) => {
   await expect(page.locator('[role="textbox"]:visible')).toHaveCount(1);
 });
 
+test("clicking a preview character moves the source cursor to that character", async ({ page }) => {
+  await page.goto("/");
+  const preview = page.frameLocator("iframe.standalone-preview");
+  const title = preview.locator(".umber-run-text").filter({ hasText: "A tiny book" });
+  await expect(title).toBeVisible();
+  const previewPoint = await title.evaluate((element) => {
+    const text = element as SVGTextContentElement;
+    const unit = text.textContent?.indexOf("tiny") ?? -1;
+    if (unit < 0) throw new Error("title unit was not rendered");
+    const extent = text.getExtentOfChar(unit);
+    const point = text.ownerSVGElement?.createSVGPoint();
+    const matrix = text.getScreenCTM();
+    if (!point || !matrix) throw new Error("title geometry was unavailable");
+    point.x = extent.x + extent.width / 2;
+    point.y = extent.y + extent.height / 2;
+    const client = point.matrixTransform(matrix);
+    return { x: client.x, y: client.y };
+  });
+  const frameBox = await page.locator("iframe.standalone-preview").boundingBox();
+  if (!frameBox) throw new Error("preview frame geometry was unavailable");
+  await page.mouse.click(frameBox.x + previewPoint.x, frameBox.y + previewPoint.y);
+
+  const editor = page.locator('[role="textbox"]:visible');
+  await expect(editor).toBeFocused();
+  await page.keyboard.insertText("|");
+  await expect(editor).toContainText(String.raw`\centerline{A |tiny book about umber}`);
+});
+
+test("selecting preview text selects the matching source range", async ({ page }) => {
+  await page.goto("/");
+  const title = page
+    .frameLocator("iframe.standalone-preview")
+    .locator(".umber-run-text")
+    .filter({ hasText: "A tiny book" });
+  await expect(title).toBeVisible();
+  await title.evaluate((element) => {
+    const text = element as SVGTextContentElement;
+    const startUnit = text.textContent?.indexOf("tiny") ?? -1;
+    const endUnit = startUnit + "tiny".length - 1;
+    const matrix = text.getScreenCTM();
+    const svg = text.ownerSVGElement;
+    if (startUnit < 0 || !matrix || !svg) throw new Error("title geometry was unavailable");
+    const toClient = (x: number, y: number) => {
+      const point = svg.createSVGPoint();
+      point.x = x;
+      point.y = y;
+      const client = point.matrixTransform(matrix);
+      return { x: client.x, y: client.y };
+    };
+    const start = text.getExtentOfChar(startUnit);
+    const end = text.getExtentOfChar(endUnit);
+    const startPoint = toClient(start.x + start.width / 2, start.y + start.height / 2);
+    const endPoint = toClient(end.x + end.width / 2, end.y + end.height / 2);
+    text.dispatchEvent(
+      new MouseEvent("mousedown", {
+        bubbles: true,
+        button: 0,
+        clientX: startPoint.x,
+        clientY: startPoint.y,
+      }),
+    );
+    text.dispatchEvent(
+      new MouseEvent("mouseup", {
+        bubbles: true,
+        button: 0,
+        clientX: endPoint.x,
+        clientY: endPoint.y,
+      }),
+    );
+  });
+  await expect
+    .poll(() => title.evaluate((element) => element.ownerDocument.getSelection()?.toString()))
+    .toBe("tiny");
+
+  const editor = page.locator('[role="textbox"]:visible');
+  await expect(editor).toBeFocused();
+  await page.keyboard.insertText("|");
+  await expect(editor).toContainText(String.raw`\centerline{A | book about umber}`);
+});
+
 test("recovers from transient TeX errors during rapid editing", async ({ page }) => {
   await page.goto("/");
   const editor = page.locator('[role="textbox"]:visible');

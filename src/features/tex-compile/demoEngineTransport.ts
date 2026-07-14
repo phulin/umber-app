@@ -122,6 +122,8 @@ export function createDemoEngineTransport(): FakeEngineTransport {
         return [];
       case "exportPdf":
         return [];
+      case "renderedSource":
+        return [{ t: "renderedSource", requestId: message.requestId }];
     }
   };
   return new FakeEngineTransport([], handler);

@@ -15,6 +15,15 @@ export type EditMessage = {
   insert: ArrayBuffer;
 };
 
+export type RenderedSourceLocation = {
+  revision: number;
+  path: string;
+  start: number;
+  end: number;
+  line: number;
+  column: number;
+};
+
 export type ToEngine =
   | { t: "init"; bundleDigest: string; engineOpts: EngineOptions }
   | { t: "openProject"; files: ProjectFile[]; entry: string }
@@ -22,7 +31,8 @@ export type ToEngine =
   | { t: "cancel"; beforeEpoch: number }
   | { t: "fileAdd"; docId: string; path: string; bytes: ArrayBuffer }
   | { t: "fileRemove"; docId: string }
-  | { t: "exportPdf"; epoch: number };
+  | { t: "exportPdf"; epoch: number }
+  | { t: "renderedSource"; requestId: number; page: number; event: number; unit?: number };
 
 export type CompilePhase = "expanding" | "typesetting" | "fetching" | "idle";
 
@@ -80,6 +90,7 @@ export type FromEngine =
   | { t: "document"; epoch: number; html: ArrayBuffer }
   | { t: "diagnostics"; epoch: number; items: Diagnostic[] }
   | { t: "pdf"; epoch: number; bytes: ArrayBuffer }
+  | { t: "renderedSource"; requestId: number; location?: RenderedSourceLocation }
   | { t: "fatal"; message: string; kind?: "engine" | "worker" }
   | {
       t: "telemetry";
@@ -96,6 +107,8 @@ const isNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);
 const isNonNegativeInteger = (value: unknown): value is number =>
   isNumber(value) && Number.isInteger(value) && value >= 0;
+const isPositiveInteger = (value: unknown): value is number =>
+  isNumber(value) && Number.isInteger(value) && value >= 1;
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every(isString);
 const isArrayBuffer = (value: unknown): value is ArrayBuffer =>
@@ -146,6 +159,19 @@ function isDiagnostic(value: unknown): value is Diagnostic {
     isNonNegativeInteger(value.byteEnd) &&
     value.byteEnd >= value.byteStart &&
     isString(value.message)
+  );
+}
+
+function isRenderedSourceLocation(value: unknown): value is RenderedSourceLocation {
+  return (
+    isRecord(value) &&
+    isNonNegativeInteger(value.revision) &&
+    isString(value.path) &&
+    isNonNegativeInteger(value.start) &&
+    isNonNegativeInteger(value.end) &&
+    value.end >= value.start &&
+    isNonNegativeInteger(value.line) &&
+    isNonNegativeInteger(value.column)
   );
 }
 
@@ -215,6 +241,11 @@ export function decodeFromEngine(value: unknown): FromEngine | null {
       return isNonNegativeInteger(value.epoch) && isArrayBuffer(value.bytes)
         ? (value as FromEngine)
         : null;
+    case "renderedSource":
+      return isNonNegativeInteger(value.requestId) &&
+        (value.location === undefined || isRenderedSourceLocation(value.location))
+        ? (value as FromEngine)
+        : null;
     case "fatal":
       return isString(value.message) &&
         (value.kind === undefined || value.kind === "engine" || value.kind === "worker")
@@ -263,6 +294,13 @@ export function decodeToEngine(value: unknown): ToEngine | null {
       return isString(value.docId) ? (value as ToEngine) : null;
     case "exportPdf":
       return isNonNegativeInteger(value.epoch) ? (value as ToEngine) : null;
+    case "renderedSource":
+      return isNonNegativeInteger(value.requestId) &&
+        isPositiveInteger(value.page) &&
+        isNonNegativeInteger(value.event) &&
+        (value.unit === undefined || isNonNegativeInteger(value.unit))
+        ? (value as ToEngine)
+        : null;
     default:
       return null;
   }

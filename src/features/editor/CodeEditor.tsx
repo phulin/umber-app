@@ -20,7 +20,7 @@ type CodeEditorProps = {
   value: string;
   readOnly?: boolean;
   diagnostics?: readonly Diagnostic[];
-  cursorTarget?: { offset: number; requestId: number };
+  cursorTarget?: { offset: number; endOffset?: number; requestId: number };
   onChange?: (value: string) => void;
   onDelta?: (delta: EditorDelta) => void;
   onCursor?: (cursor: EditorCursor) => void;
@@ -119,8 +119,9 @@ export function CodeEditor(props: CodeEditorProps) {
     const view = editorView();
     if (target === undefined || !view) return;
     const position = Math.max(0, Math.min(target.offset, view.state.doc.length));
+    const endPosition = Math.max(0, Math.min(target.endOffset ?? position, view.state.doc.length));
     view.dispatch({
-      selection: { anchor: position },
+      selection: { anchor: position, head: endPosition },
       effects: EditorView.scrollIntoView(position, { y: "center" }),
     });
     view.focus();

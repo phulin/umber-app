@@ -87,5 +87,23 @@ describe("engine protocol boundary", () => {
         insert: new ArrayBuffer(2),
       }),
     ).toBeNull();
+    expect(
+      decodeToEngine({ t: "renderedSource", requestId: 4, page: 1, event: 7, unit: 2 }),
+    ).not.toBeNull();
+    expect(decodeToEngine({ t: "renderedSource", requestId: 4, page: 0, event: 7 })).toBeNull();
+    expect(
+      decodeFromEngine({
+        t: "renderedSource",
+        requestId: 4,
+        location: {
+          revision: 2,
+          path: "main.tex",
+          start: 9,
+          end: 10,
+          line: 1,
+          column: 10,
+        },
+      }),
+    ).not.toBeNull();
   });
 });

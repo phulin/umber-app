@@ -33,6 +33,10 @@ export class CompileOrchestrator {
     return this.#saturated;
   }
 
+  requestRenderedSource(requestId: number, page: number, event: number, unit?: number): void {
+    this.#session.send({ t: "renderedSource", requestId, page, event, unit });
+  }
+
   initialize(
     init: Extract<ToEngine, { t: "init" }>,
     project: { files: ProjectFile[]; entry: string; editableDocIds?: ReadonlySet<string> },

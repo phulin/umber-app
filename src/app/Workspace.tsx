@@ -8,7 +8,7 @@ import {
 import { FontManager } from "../features/preview/fontManager";
 import { IncrementalPreview } from "../features/preview/IncrementalPreview";
 import type { PatchMessage } from "../features/preview/previewDocument";
-import { StandalonePreview } from "../features/preview/StandalonePreview";
+import { type RenderedPreviewHit, StandalonePreview } from "../features/preview/StandalonePreview";
 import { ProjectAutosave } from "../features/projects/autosave";
 import { exportProjectZip } from "../features/projects/projectArchive";
 import type { ProjectStore } from "../features/projects/projectStore";
@@ -23,7 +23,12 @@ import {
   type EngineTransport,
   RestartableEngineTransport,
 } from "../features/tex-compile/engineTransport";
-import type { Diagnostic, ProjectFile, SourceSpan } from "../features/tex-compile/protocol";
+import type {
+  Diagnostic,
+  ProjectFile,
+  RenderedSourceLocation,
+  SourceSpan,
+} from "../features/tex-compile/protocol";
 
 export type WorkspaceDocument = { id: string; path: string; text: string };
 export type WorkspaceBinaryFile = { id: string; path: string; bytes: Uint8Array };
@@ -80,6 +85,7 @@ export function Workspace(props: WorkspaceProps) {
   const [cursorTarget, setCursorTarget] = createSignal<{
     docId: string;
     offset: number;
+    endOffset?: number;
     requestId: number;
   }>();
   const spans = new SpanIndex();
@@ -107,6 +113,16 @@ export function Workspace(props: WorkspaceProps) {
   let autosave: ProjectAutosave | undefined;
   let detachLifecycle: (() => void) | undefined;
   let cursorRequestId = 0;
+  let renderedSourceRequestId = 0;
+  let renderedSelectionId = 0;
+  const renderedSelectionQueries = new Map<
+    number,
+    { selectionId: number; edge: "start" | "end" }
+  >();
+  const renderedSelectionResults = new Map<
+    number,
+    { start?: RenderedSourceLocation; end?: RenderedSourceLocation }
+  >();
 
   const jumpToSource = (docId: string, byteOffset: number) => {
     const document = documents.find(({ id }) => id === docId);
@@ -114,6 +130,38 @@ export function Workspace(props: WorkspaceProps) {
     const offsets = new Utf8OffsetMap(document.text());
     const utf16Offset = offsets.byteToUtf16(Math.min(byteOffset, offsets.byteLength));
     setCursorTarget({ docId, offset: utf16Offset, requestId: ++cursorRequestId });
+  };
+
+  const jumpToSourcePath = (path: string, byteOffset: number) => {
+    const projectPath = path.startsWith("/job/") ? path.slice("/job/".length) : path;
+    const document = documents.find((candidate) => candidate.path === projectPath);
+    if (document) jumpToSource(document.id, byteOffset);
+  };
+
+  const jumpToSourceRange = (path: string, byteStart: number, byteEnd: number) => {
+    const projectPath = path.startsWith("/job/") ? path.slice("/job/".length) : path;
+    const document = documents.find((candidate) => candidate.path === projectPath);
+    if (!document) return;
+    const offsets = new Utf8OffsetMap(document.text());
+    setCursorTarget({
+      docId: document.id,
+      offset: offsets.byteToUtf16(Math.min(byteStart, offsets.byteLength)),
+      endOffset: offsets.byteToUtf16(Math.min(byteEnd, offsets.byteLength)),
+      requestId: ++cursorRequestId,
+    });
+  };
+
+  const requestRenderedSelection = (start: RenderedPreviewHit, end: RenderedPreviewHit) => {
+    const selectionId = ++renderedSelectionId;
+    renderedSelectionResults.set(selectionId, {});
+    for (const [edge, hit] of [
+      ["start", start],
+      ["end", end],
+    ] as const) {
+      const requestId = ++renderedSourceRequestId;
+      renderedSelectionQueries.set(requestId, { selectionId, edge });
+      orchestrator.requestRenderedSource(requestId, hit.page, hit.event, hit.unit);
+    }
   };
 
   const handleCursor = (cursor: EditorCursor) => {
@@ -174,6 +222,26 @@ export function Workspace(props: WorkspaceProps) {
         setPreviewEpoch(message.epoch);
         performanceMonitor.patchApplied(message.epoch, 0);
         setLatency(performanceMonitor.summary());
+      }
+      if (message.t === "renderedSource") {
+        const selectionQuery = renderedSelectionQueries.get(message.requestId);
+        if (!selectionQuery) {
+          if (message.location) jumpToSourcePath(message.location.path, message.location.start);
+        } else {
+          renderedSelectionQueries.delete(message.requestId);
+          const result = renderedSelectionResults.get(selectionQuery.selectionId);
+          if (!message.location || !result) {
+            renderedSelectionResults.delete(selectionQuery.selectionId);
+          } else {
+            result[selectionQuery.edge] = message.location;
+            if (result.start && result.end) {
+              renderedSelectionResults.delete(selectionQuery.selectionId);
+              if (result.start.path === result.end.path) {
+                jumpToSourceRange(result.start.path, result.start.start, result.end.end);
+              }
+            }
+          }
+        }
       }
       if (message.t === "telemetry") telemetry.recordHealth(message.metric);
       if (message.t === "diagnostics" && message.epoch >= diagnosticEpoch()) {
@@ -307,7 +375,15 @@ export function Workspace(props: WorkspaceProps) {
               />
             }
           >
-            {(html) => <StandalonePreview html={html()} />}
+            {(html) => (
+              <StandalonePreview
+                html={html()}
+                onRenderedSource={({ page, event, unit }) =>
+                  orchestrator.requestRenderedSource(++renderedSourceRequestId, page, event, unit)
+                }
+                onRenderedSelection={({ start, end }) => requestRenderedSelection(start, end)}
+              />
+            )}
           </Show>
         </section>
       </section>

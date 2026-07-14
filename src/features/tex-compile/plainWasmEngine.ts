@@ -182,6 +182,11 @@ export async function createPlainWasmEngine(
         open(message.files, message.entry);
         return;
       }
+      if (message.t === "renderedSource") {
+        const location = session?.renderedSourceLocation(message.page, message.event, message.unit);
+        emit({ t: "renderedSource", requestId: message.requestId, location });
+        return;
+      }
       if (message.t === "edit") {
         if (!session || message.docId !== mainDocId) {
           diagnostic(message.epoch, "This quick demo only edits the main TeX file");
