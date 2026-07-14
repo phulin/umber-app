@@ -61,12 +61,27 @@ test("renders Plain TeX math with scripts, symbols, and extensions", async ({ pa
   await page.keyboard.press("Control+A");
   await page.keyboard.insertText(
     String.raw`A useful identity: $x^2+y^2=z^2$ and $\alpha\leq\beta$.\par
-$$\sum_{i=1}^{n} i={n(n+1)\over2}.$$\bye`,
+$$\sum_{x}^{y} f(x).$$\bye`,
   );
 
   await expect(preview.locator("body")).toContainText("A useful identity");
-  await expect(preview.locator(".umber-run-text").filter({ hasText: "∑" })).toBeVisible();
+  const sumGlyph = String.fromCodePoint(0xe000 + 88);
+  const sum = preview.locator(".umber-run-text").filter({ hasText: sumGlyph });
+  await expect(sum).toBeVisible();
   await expect(preview.locator(".umber-run-text").filter({ hasText: "≤" })).toBeVisible();
+  const runViewport = await sum.evaluate((element) => {
+    const run = element.closest(".umber-run");
+    return run ? { width: run.clientWidth, height: run.clientHeight } : null;
+  });
+  expect(runViewport?.width).toBeGreaterThan(0);
+  expect(runViewport?.height).toBeGreaterThan(0);
+  const [sumBox, upperLimitBox] = await Promise.all([
+    sum.boundingBox(),
+    preview.locator(".umber-run-text").filter({ hasText: "y" }).first().boundingBox(),
+  ]);
+  expect((upperLimitBox?.y ?? 0) + (upperLimitBox?.height ?? 0)).toBeLessThanOrEqual(
+    (sumBox?.y ?? 0) + 1,
+  );
   await expect(page.getByText("No diagnostics.")).toBeVisible();
 });
 

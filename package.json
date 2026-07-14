@@ -27,7 +27,6 @@
     "@umber/umber-wasm": "file:../umber2/target/umber-wasm-package",
     "codemirror": "^6.0.2",
     "fflate": "^0.8.3",
-    "katex": "^0.17.0",
     "solid-codemirror": "^2.3.3",
     "solid-js": "^1.9.14"
   },

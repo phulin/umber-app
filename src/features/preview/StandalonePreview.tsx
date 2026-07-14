@@ -19,7 +19,7 @@ export function StandalonePreview(props: { html: ArrayBuffer }) {
     lastRender = renderKey;
     const fittedHtml = source.replace(
       "</style>",
-      `.umber-document{zoom:${scale.toFixed(4)}}\n</style>`,
+      `.umber-document{zoom:${scale.toFixed(4)}}\n.umber-run{width:100%;height:100%}\n</style>`,
     );
     installHtmlPreview(iframe, new TextEncoder().encode(fittedHtml));
   };
