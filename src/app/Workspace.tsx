@@ -8,6 +8,7 @@ import {
 import { FontManager } from "../features/preview/fontManager";
 import { IncrementalPreview } from "../features/preview/IncrementalPreview";
 import type { PatchMessage } from "../features/preview/previewDocument";
+import { StandalonePreview } from "../features/preview/StandalonePreview";
 import { ProjectAutosave } from "../features/projects/autosave";
 import { exportProjectZip } from "../features/projects/projectArchive";
 import type { ProjectStore } from "../features/projects/projectStore";
@@ -67,10 +68,10 @@ export function Workspace(props: WorkspaceProps) {
     return { ...document, text, setText };
   });
   const entryDocument = documents.find(({ path }) => path === props.entry) ?? documents[0];
-  const [activeDocId, setActiveDocId] = createSignal(entryDocument?.id ?? "");
   const [engineStatus, setEngineStatus] = createSignal("Starting engine…");
   const [recoveryNotice, setRecoveryNotice] = createSignal<string>();
   const [previewPatch, setPreviewPatch] = createSignal<PatchMessage>();
+  const [previewDocument, setPreviewDocument] = createSignal<ArrayBuffer>();
   const [previewEpoch, setPreviewEpoch] = createSignal(0);
   const [diagnostics, setDiagnostics] = createSignal<Diagnostic[]>([]);
   const [diagnosticEpoch, setDiagnosticEpoch] = createSignal(0);
@@ -87,7 +88,7 @@ export function Workspace(props: WorkspaceProps) {
   const [telemetryEnabled, setTelemetryEnabled] = createSignal(telemetry.enabled);
   const orchestrator = new CompileOrchestrator(
     props.engineTransport ??
-      (liveEngine
+      (typeof Worker === "function"
         ? new RestartableEngineTransport(createWasmWorkerTransport)
         : createDemoEngineTransport()),
   );
@@ -112,7 +113,6 @@ export function Workspace(props: WorkspaceProps) {
     if (!document) return;
     const offsets = new Utf8OffsetMap(document.text());
     const utf16Offset = offsets.byteToUtf16(Math.min(byteOffset, offsets.byteLength));
-    setActiveDocId(docId);
     setCursorTarget({ docId, offset: utf16Offset, requestId: ++cursorRequestId });
   };
 
@@ -169,6 +169,12 @@ export function Workspace(props: WorkspaceProps) {
         setPreviewEpoch(message.epoch);
         spans.apply(message.epoch, message.spans);
       }
+      if (message.t === "document") {
+        setPreviewDocument(message.html);
+        setPreviewEpoch(message.epoch);
+        performanceMonitor.patchApplied(message.epoch, 0);
+        setLatency(performanceMonitor.summary());
+      }
       if (message.t === "telemetry") telemetry.recordHealth(message.metric);
       if (message.t === "diagnostics" && message.epoch >= diagnosticEpoch()) {
         setDiagnosticEpoch(message.epoch);
@@ -185,7 +191,9 @@ export function Workspace(props: WorkspaceProps) {
       {
         t: "init",
         bundleDigest,
-        engineOpts: liveEngine ? { moduleUrl: engineModuleUrl, bundleBaseUrl } : { mode: "fake" },
+        engineOpts: liveEngine
+          ? { moduleUrl: engineModuleUrl, bundleBaseUrl }
+          : { mode: "plain-demo" },
       },
       {
         entry: props.entry,
@@ -261,67 +269,21 @@ export function Workspace(props: WorkspaceProps) {
       </Show>
 
       <section class="workspace-grid" aria-label="Workspace preview">
-        <aside class="panel file-tree">
-          <div class="panel-heading">
-            <span>Project</span>
-            <span class="muted">{documents.length + (props.binaryFiles?.length ?? 0)} files</span>
-          </div>
-          <ul>
-            <For each={documents}>
-              {(document) => (
-                <li>
-                  <button
-                    type="button"
-                    classList={{ active: activeDocId() === document.id }}
-                    onClick={() => setActiveDocId(document.id)}
-                  >
-                    {document.path}
-                  </button>
-                </li>
-              )}
-            </For>
-            <For each={props.binaryFiles ?? []}>
-              {(file) => (
-                <li class="binary-file" title="Binary project resource">
-                  <span>{file.path}</span>
-                  <span class="binary-badge">binary</span>
-                </li>
-              )}
-            </For>
-          </ul>
-        </aside>
-
         <section class="panel editor-panel">
-          <div class="editor-tabs" role="tablist" aria-label="Open files">
-            <For each={documents}>
-              {(document) => (
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={activeDocId() === document.id}
-                  onClick={() => setActiveDocId(document.id)}
-                >
-                  {document.path}
-                </button>
-              )}
-            </For>
-          </div>
-          <For each={documents}>
+          <Show when={entryDocument}>
             {(document) => (
-              <div hidden={activeDocId() !== document.id}>
-                <CodeEditor
-                  docId={document.id}
-                  value={document.text()}
-                  readOnly={props.readOnly}
-                  diagnostics={diagnostics().filter(({ docId }) => docId === document.id)}
-                  cursorTarget={cursorTarget()?.docId === document.id ? cursorTarget() : undefined}
-                  onChange={(value) => saveDocument(document, value)}
-                  onDelta={handleEdit}
-                  onCursor={handleCursor}
-                />
-              </div>
+              <CodeEditor
+                docId={document().id}
+                value={document().text()}
+                readOnly={props.readOnly}
+                diagnostics={diagnostics().filter(({ docId }) => docId === document().id)}
+                cursorTarget={cursorTarget()?.docId === document().id ? cursorTarget() : undefined}
+                onChange={(value) => saveDocument(document(), value)}
+                onDelta={handleEdit}
+                onCursor={handleCursor}
+              />
             )}
-          </For>
+          </Show>
         </section>
 
         <section class="panel preview-panel">
@@ -329,17 +291,24 @@ export function Workspace(props: WorkspaceProps) {
             <span>HTML Preview</span>
             <span class="muted">Epoch {previewEpoch()}</span>
           </div>
-          <IncrementalPreview
-            patch={previewPatch()}
-            highlightedElementId={highlightedElementId()}
-            onSourceSpan={(span: SourceSpan) => jumpToSource(span.docId, span.byteStart)}
-            onPatchApplied={({ epoch, durationMs }) => {
-              performanceMonitor.patchApplied(epoch, durationMs);
-              const summary = performanceMonitor.summary();
-              setLatency(summary);
-              telemetry.sendPerformance(summary);
-            }}
-          />
+          <Show
+            when={previewDocument()}
+            fallback={
+              <IncrementalPreview
+                patch={previewPatch()}
+                highlightedElementId={highlightedElementId()}
+                onSourceSpan={(span: SourceSpan) => jumpToSource(span.docId, span.byteStart)}
+                onPatchApplied={({ epoch, durationMs }) => {
+                  performanceMonitor.patchApplied(epoch, durationMs);
+                  const summary = performanceMonitor.summary();
+                  setLatency(summary);
+                  telemetry.sendPerformance(summary);
+                }}
+              />
+            }
+          >
+            {(html) => <StandalonePreview html={html()} />}
+          </Show>
         </section>
       </section>
 

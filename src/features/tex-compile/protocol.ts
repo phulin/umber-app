@@ -77,6 +77,7 @@ export type FromEngine =
       spans: SourceSpan[];
       final: boolean;
     }
+  | { t: "document"; epoch: number; html: ArrayBuffer }
   | { t: "diagnostics"; epoch: number; items: Diagnostic[] }
   | { t: "pdf"; epoch: number; bytes: ArrayBuffer }
   | { t: "fatal"; message: string; kind?: "engine" | "worker" }
@@ -200,6 +201,10 @@ export function decodeFromEngine(value: unknown): FromEngine | null {
         typeof value.final === "boolean"
         ? (value as FromEngine)
         : null;
+    case "document":
+      return isNonNegativeInteger(value.epoch) && isArrayBuffer(value.html)
+        ? (value as FromEngine)
+        : null;
     case "diagnostics":
       return isNonNegativeInteger(value.epoch) &&
         Array.isArray(value.items) &&
@@ -273,6 +278,8 @@ export function transferablesFor(message: ToEngine | FromEngine): Transferable[]
       return [message.bytes];
     case "patch":
       return message.blocks.map((block) => block.html);
+    case "document":
+      return [message.html];
     case "pdf":
       return [message.bytes];
     default:

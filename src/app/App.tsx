@@ -12,18 +12,14 @@ const demoDocuments: WorkspaceDocument[] = [
   {
     id: "main",
     path: "main.tex",
-    text: String.raw`\documentclass{article}
-\begin{document}
-Hello, Umber.
-\end{document}`,
-  },
-  {
-    id: "references",
-    path: "references.bib",
-    text: `@book{umber,
-  title = {Browser-Native TeX},
-  year = {2026}
-}`,
+    text: String.raw`\centerline{A tiny book about umber}
+\bigskip
+Umber is the color of old maps, wet earth, and strong coffee.
+This little page was typeset entirely in your browser.
+\par
+\bigskip
+\rightline{--- Hello from Plain \TeX}
+\bye`,
   },
 ];
 

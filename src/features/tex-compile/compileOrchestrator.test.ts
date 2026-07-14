@@ -43,6 +43,20 @@ describe("CompileOrchestrator", () => {
       fromByte: 1,
       toByte: 1,
     });
+    expect(orchestrator.saturated).toBe(true);
+    orchestrator.dispose();
+  });
+
+  it("coalesces edits that arrive before the worker reports saturation", () => {
+    const { transport, orchestrator } = setup();
+    orchestrator.submitEdit(delta(1, 1, "X"));
+    orchestrator.submitEdit(delta(2, 2, "Y"));
+
+    expect(transport.received.filter(({ t }) => t === "edit")).toHaveLength(1);
+    transport.emit({ t: "progress", epoch: 1, phase: "idle" });
+
+    expect(transport.received.filter(({ t }) => t === "edit")).toHaveLength(2);
+    expect(transport.received.at(-1)).toMatchObject({ t: "edit", epoch: 2 });
     orchestrator.dispose();
   });
 

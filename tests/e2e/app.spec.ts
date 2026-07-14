@@ -7,49 +7,49 @@ test("renders the app shell", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Umber Browser-native TeX" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Copy into a project" })).toBeVisible();
   await expect(page.getByText("HTML Preview")).toBeVisible();
-  const previewSpan = page.locator("#span-1");
-  await expect(previewSpan).toHaveText("Hello, Umber.");
-  await expect(page.getByText("Fake engine source-span check")).toBeVisible();
+  const preview = page.frameLocator("iframe.standalone-preview");
+  await expect(preview.locator(".umber-page")).toBeVisible();
+  await expect(preview.locator("body")).toContainText("A tiny book about umber");
+  const pageWidth = await preview
+    .locator(".umber-page")
+    .evaluate((element) => element.getBoundingClientRect().width);
+  const previewWidth = await page
+    .locator("iframe.standalone-preview")
+    .evaluate((element) => element.clientWidth);
+  expect(pageWidth).toBeLessThanOrEqual(previewWidth);
   const diagnostics = page.locator("details.diagnostics-panel");
   await expect(diagnostics).toHaveAttribute("open", "");
   await diagnostics.locator("summary").click();
   await expect(diagnostics).not.toHaveAttribute("open", "");
-  const selectedText = await previewSpan.evaluate((element) => {
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    return selection?.toString();
-  });
-  expect(selectedText).toBe("Hello, Umber.");
 
-  await previewSpan.click();
-  await expect(page.getByRole("textbox").first()).toBeFocused();
-  await expect(previewSpan).toHaveClass(/source-sync-highlight/);
-  await page.keyboard.press("Shift+End");
-  await page.keyboard.type("Updated preview.");
-  await expect(previewSpan).toHaveText("Updated preview.");
+  const editor = page.getByRole("textbox").first();
+  await editor.focus();
+  await page.keyboard.press("Control+A");
+  await page.keyboard.type("Updated in the browser.\\par\\bye");
+  await expect(preview.locator("body")).toContainText("Updated in the browser.");
   await expect(page.getByText(/Edit → patch p50/).locator("..")).not.toContainText("— ms");
 });
 
-test("preserves independent editor documents while switching tabs", async ({ page }) => {
+test("shows one editor without file navigation", async ({ page }) => {
   await page.goto("/");
-  const visibleEditor = () => page.locator('[role="textbox"]:visible');
+  await expect(page.locator(".file-tree")).toHaveCount(0);
+  await expect(page.getByRole("tablist", { name: "Open files" })).toHaveCount(0);
+  await expect(page.locator('[role="textbox"]:visible')).toHaveCount(1);
+});
 
-  await visibleEditor().focus();
-  await page.keyboard.press("Control+End");
-  await page.keyboard.type("% main note");
-  await page.getByRole("tab", { name: "references.bib" }).click();
-  await expect(visibleEditor()).toContainText("Browser-Native TeX");
-  await visibleEditor().focus();
-  await page.keyboard.press("Control+End");
-  await page.keyboard.type("% bib note");
+test("recovers from transient TeX errors during rapid editing", async ({ page }) => {
+  await page.goto("/");
+  const editor = page.locator('[role="textbox"]:visible');
+  const preview = page.frameLocator("iframe.standalone-preview");
 
-  await page.getByRole("tab", { name: "main.tex" }).click();
-  await expect(visibleEditor()).toContainText("% main note");
-  await page.getByRole("tab", { name: "references.bib" }).click();
-  await expect(visibleEditor()).toContainText("% bib note");
+  await editor.focus();
+  await page.keyboard.press("Control+A");
+  await page.keyboard.type("}");
+  await page.keyboard.press("Control+A");
+  await page.keyboard.type("Recovered quickly.\\par\\bye");
+
+  await expect(preview.locator("body")).toContainText("Recovered quickly.");
+  await expect(page.getByText(/Engine recovery started automatically/)).toHaveCount(0);
 });
 
 test("persists demo scratch edits and copies their current state into a project", async ({
@@ -95,7 +95,6 @@ test("imports binary project resources without opening them as text", async ({ p
   });
 
   await expect(page).toHaveURL(/#\/project\//);
-  await expect(page.getByText("figures/plot.png")).toBeVisible();
-  await expect(page.getByText("binary", { exact: true })).toBeVisible();
+  await expect(page.locator(".file-tree")).toHaveCount(0);
   await expect(page.getByRole("tab", { name: "figures/plot.png" })).toHaveCount(0);
 });

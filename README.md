@@ -7,9 +7,13 @@ supports bidirectional source/preview synchronization.
 ## Development
 
 ```sh
+(cd ../umber2 && scripts/build-wasm-package.sh)
 npm ci
 npm run dev
 ```
+
+The default demo uses the locally built `@umber/umber-wasm` package, its bundled Plain format,
+and its Computer Modern web font. It does not require a TeX Live bundle server.
 
 Verification:
 

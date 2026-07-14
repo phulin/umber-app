@@ -2,6 +2,7 @@ import { BundleResolver } from "../features/resources/bundleResolver";
 import { scanTexDependencies } from "../features/resources/dependencyScanner";
 import { createResourceCache, type ResourceCache } from "../features/resources/resourceCache";
 import { WorkerSyncResourceCache } from "../features/resources/syncResourceCache";
+import { createPlainWasmEngine } from "../features/tex-compile/plainWasmEngine";
 import {
   decodeToEngine,
   type FromEngine,
@@ -26,6 +27,7 @@ type EngineInitOptions = {
 const scope = globalThis as unknown as WorkerScope;
 let engine: IncrementalTexEngine | undefined;
 let activeResolver: BundleResolver | undefined;
+let messageQueue = Promise.resolve();
 
 const emit = (message: FromEngine) => scope.postMessage(message, transferablesFor(message));
 
@@ -47,6 +49,12 @@ async function createWorkerCache(bundleDigest: string): Promise<ResourceCache> {
 
 async function boot(message: Extract<ToEngine, { t: "init" }>): Promise<void> {
   await engine?.dispose();
+  if (message.engineOpts.mode === "plain-demo") {
+    activeResolver = undefined;
+    engine = await createPlainWasmEngine(emit);
+    await engine.handle(message);
+    return;
+  }
   const options = initOptions(message);
   const cache = await createWorkerCache(message.bundleDigest);
   const resolver = new BundleResolver({
@@ -80,7 +88,9 @@ async function handle(raw: unknown): Promise<void> {
 }
 
 scope.onmessage = (event) => {
-  handle(event.data).catch((error: unknown) => {
-    emit({ t: "fatal", message: error instanceof Error ? error.message : String(error) });
-  });
+  messageQueue = messageQueue
+    .then(() => handle(event.data))
+    .catch((error: unknown) => {
+      emit({ t: "fatal", message: error instanceof Error ? error.message : String(error) });
+    });
 };

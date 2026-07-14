@@ -59,6 +59,11 @@ describe("engine protocol boundary", () => {
     const patch = paragraphEditGolden[2];
     expect(patch?.t).toBe("patch");
     expect(transferablesFor(patch)).toEqual(patch.t === "patch" ? [patch.blocks[0]?.html] : []);
+
+    const html = new ArrayBuffer(4);
+    const document = decodeFromEngine({ t: "document", epoch: 2, html });
+    expect(document).toEqual({ t: "document", epoch: 2, html });
+    expect(document && transferablesFor(document)).toEqual([html]);
   });
 
   it("validates the main-thread side of the protocol", () => {

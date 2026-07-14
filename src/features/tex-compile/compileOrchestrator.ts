@@ -62,6 +62,7 @@ export class CompileOrchestrator {
       document.pendingEpoch = epoch;
       return;
     }
+    this.#saturated = true;
     this.#session.editAtEpoch(epoch, delta.docId, delta.fromByte, delta.toByte, delta.insertedText);
     document.engineText = document.localText;
   }
@@ -111,6 +112,7 @@ export class CompileOrchestrator {
         delta.toByte,
         delta.insertedText,
       );
+      this.#saturated = true;
       document.engineText = document.localText;
       document.pendingEpoch = undefined;
     }
