@@ -1,4 +1,4 @@
-import { StreamLanguage } from "@codemirror/language";
+import { defaultHighlightStyle, StreamLanguage, syntaxHighlighting } from "@codemirror/language";
 import { stex } from "@codemirror/legacy-modes/mode/stex";
 import { type Diagnostic as CodeMirrorDiagnostic, setDiagnostics } from "@codemirror/lint";
 import { EditorView } from "@codemirror/view";
@@ -25,6 +25,34 @@ type CodeEditorProps = {
   onDelta?: (delta: EditorDelta) => void;
   onCursor?: (cursor: EditorCursor) => void;
 };
+
+const editorTheme = EditorView.theme(
+  {
+    "&": {
+      backgroundColor: "#fffdf8",
+      color: "#25221f",
+    },
+    ".cm-content": { caretColor: "#27615d" },
+    ".cm-cursor, .cm-dropCursor": { borderLeftColor: "#27615d" },
+    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
+      backgroundColor: "#c9dedb",
+    },
+    ".cm-gutters": {
+      backgroundColor: "#f4f1ea",
+      color: "#6e6861",
+      borderRightColor: "#d8d1c6",
+    },
+    ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "#f1eee7" },
+    ".cm-tooltip": {
+      backgroundColor: "#fffdf8",
+      border: "1px solid #bdb5aa",
+      color: "#25221f",
+    },
+    ".cm-tooltip-lint .cm-diagnostic": { color: "#25221f" },
+    ".cm-panel": { color: "#25221f" },
+  },
+  { dark: false },
+);
 
 export function engineDiagnosticsToCodeMirror(
   diagnostics: readonly Diagnostic[],
@@ -62,6 +90,8 @@ export function CodeEditor(props: CodeEditorProps) {
 
   createExtension(basicSetup);
   createExtension(StreamLanguage.define(stex));
+  createExtension(editorTheme);
+  createExtension(syntaxHighlighting(defaultHighlightStyle));
   createExtension(EditorView.lineWrapping);
   createExtension(() => EditorView.editable.of(!readOnly()));
   createExtension(
