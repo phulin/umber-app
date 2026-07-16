@@ -183,6 +183,32 @@ $$\sum_{x}^{y} f(x).$$\bye`,
   await expect(page.getByText("No diagnostics.")).toBeVisible();
 });
 
+test("renders packaged Plain TeX text faces", async ({ page }) => {
+  await page.goto("/");
+  const editor = page.locator('[role="textbox"]:visible');
+  const preview = page.frameLocator("iframe.standalone-preview");
+
+  await editor.focus();
+  await page.keyboard.press("Control+A");
+  await page.keyboard.insertText(
+    String.raw`{\bf Bold}\par
+{\sl Slanted}\par
+{\it Italic}\par
+{\tt Typewriter}\par
+\font\sc=cmcsc10 \sc Small Caps\par
+\font\sf=cmss10 \sf Sans Serif\par
+\font\roman=cmr10 \roman Roman\par
+\bye`,
+  );
+
+  await expect(preview.locator("body")).toContainText("Bold");
+  await expect(preview.locator("body")).toContainText("Small Caps");
+  await expect(preview.locator("body")).toContainText("Sans Serif");
+  await expect(preview.locator("body")).toContainText("Roman");
+  await expect(page.getByText("No diagnostics.")).toBeVisible();
+  await expect(page.getByText(/Engine recovery started automatically/)).toHaveCount(0);
+});
+
 test("persists demo scratch edits and copies their current state into a project", async ({
   page,
 }) => {

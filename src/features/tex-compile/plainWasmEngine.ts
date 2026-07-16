@@ -3,9 +3,12 @@ import initWasm, {
   type HtmlFontInput,
   packageVersion,
   type ResourceRequest,
+  type ResourceResponse,
 } from "@umber/umber-wasm/low-level";
 import plainFormatUrl from "@umber/umber-wasm/plain.fmt?url";
 import fontEncodings from "../../assets/fonts/encodings.json";
+import cmbx10FontUrl from "../../assets/fonts/umber-cmbx10.woff2?url";
+import cmcsc10FontUrl from "../../assets/fonts/umber-cmcsc10.woff2?url";
 import cmex10FontUrl from "../../assets/fonts/umber-cmex10.woff2?url";
 import cmmi5FontUrl from "../../assets/fonts/umber-cmmi5.woff2?url";
 import cmmi7FontUrl from "../../assets/fonts/umber-cmmi7.woff2?url";
@@ -13,13 +16,34 @@ import cmmi10FontUrl from "../../assets/fonts/umber-cmmi10.woff2?url";
 import cmr5FontUrl from "../../assets/fonts/umber-cmr5.woff2?url";
 import cmr7FontUrl from "../../assets/fonts/umber-cmr7.woff2?url";
 import cmr10FontUrl from "../../assets/fonts/umber-cmr10.woff2?url";
+import cmsl10FontUrl from "../../assets/fonts/umber-cmsl10.woff2?url";
+import cmss10FontUrl from "../../assets/fonts/umber-cmss10.woff2?url";
 import cmsy5FontUrl from "../../assets/fonts/umber-cmsy5.woff2?url";
 import cmsy7FontUrl from "../../assets/fonts/umber-cmsy7.woff2?url";
 import cmsy10FontUrl from "../../assets/fonts/umber-cmsy10.woff2?url";
+import cmti10FontUrl from "../../assets/fonts/umber-cmti10.woff2?url";
+import cmtt10FontUrl from "../../assets/fonts/umber-cmtt10.woff2?url";
+import cmbx10TfmUrl from "../../assets/tfm/cmbx10.tfm?url";
+import cmcsc10TfmUrl from "../../assets/tfm/cmcsc10.tfm?url";
+import cmr10TfmUrl from "../../assets/tfm/cmr10.tfm?url";
+import cmsl10TfmUrl from "../../assets/tfm/cmsl10.tfm?url";
+import cmss10TfmUrl from "../../assets/tfm/cmss10.tfm?url";
+import cmti10TfmUrl from "../../assets/tfm/cmti10.tfm?url";
+import cmtt10TfmUrl from "../../assets/tfm/cmtt10.tfm?url";
 import type { FromEngine, ProjectFile, ToEngine } from "./protocol";
 import type { IncrementalTexEngine } from "./wasmEngineAdapter";
 
 const plainFontAssets = {
+  cmbx10: {
+    url: cmbx10FontUrl,
+    tfmContentHash: "06aff5c4e3836465b7ccf9ca03e956f3445e21c705c99a10d084cfb38c63a450",
+    sha256: "78e2f037e12d987cc5fb1c4711e816f1e218e536b4a48750e3aae322de7623f1",
+  },
+  cmcsc10: {
+    url: cmcsc10FontUrl,
+    tfmContentHash: "582c4da9bc3fc34d63199758881686f9a779b651d73e4cb5aaced37eed818872",
+    sha256: "ffd99bc9524d0461a94f1caaa39c7dc6a13806a0d57b62f0222abd23183033b4",
+  },
   cmr10: {
     url: cmr10FontUrl,
     tfmContentHash: "b5aae7453493c924123050ddf8e85ab3395b46099e44f4fa6f39c55bb526b89e",
@@ -70,6 +94,36 @@ const plainFontAssets = {
     tfmContentHash: "5a970fbe0d95cf8f27aaf9a8a64a0b6f33d53719c512f0e4bcb1bbc93e1ca799",
     sha256: "3d5725384248283ddc39691028aac1d665e2bb13638c0207329a55f2e2bf6b9a",
   },
+  cmss10: {
+    url: cmss10FontUrl,
+    tfmContentHash: "e7dfd2d5819e1ee9f40ea4101caee6c7c72bbb174c7a43f7703d609a3ecd31ad",
+    sha256: "6392014aa973e1d2039417619c2bea03fbb24950bf4186d8ffbd3d74e0e7fbf9",
+  },
+  cmsl10: {
+    url: cmsl10FontUrl,
+    tfmContentHash: "85590e7d62adfdb92a9bdb41423238b0291d86655af7ee79fa4c4bf03b24ab9e",
+    sha256: "2ec9b788471cd2de014c1f398dc133135d54aaac34f6fa0ef632d27cdd03a9ff",
+  },
+  cmti10: {
+    url: cmti10FontUrl,
+    tfmContentHash: "4aef58b6c92d599d3106aaa3b5b6cb74c62870e88dab66cfc1449cd7968d3391",
+    sha256: "48f8e8ebefc23522442d94641222de0cdacbbbaebad3b3869a353bc8dca3102a",
+  },
+  cmtt10: {
+    url: cmtt10FontUrl,
+    tfmContentHash: "a6046ee8cbd073ca93ca3f1d99c01beaf63e483d61bc9e5bfa103433340d4909",
+    sha256: "836f6af849aca4e75be97bf18ecba25166f7c1a80d7ae592850748c24501a828",
+  },
+} as const;
+
+const plainTfmAssetUrls = {
+  "cmbx10.tfm": cmbx10TfmUrl,
+  "cmcsc10.tfm": cmcsc10TfmUrl,
+  "cmr10.tfm": cmr10TfmUrl,
+  "cmss10.tfm": cmss10TfmUrl,
+  "cmsl10.tfm": cmsl10TfmUrl,
+  "cmti10.tfm": cmti10TfmUrl,
+  "cmtt10.tfm": cmtt10TfmUrl,
 } as const;
 
 async function loadPlainWebFonts(): Promise<HtmlFontInput[]> {
@@ -90,13 +144,25 @@ async function loadPlainWebFonts(): Promise<HtmlFontInput[]> {
   );
 }
 
+async function loadPlainTfms(): Promise<Map<string, Uint8Array>> {
+  const entries = await Promise.all(
+    Object.entries(plainTfmAssetUrls).map(async ([name, url]) => {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Plain ${name} request failed: ${response.status}`);
+      return [name, new Uint8Array(await response.arrayBuffer())] as const;
+    }),
+  );
+  return new Map(entries);
+}
+
 export async function createPlainWasmEngine(
   emit: (message: FromEngine) => void,
 ): Promise<IncrementalTexEngine> {
   await initWasm();
-  const [formatResponse, htmlFonts] = await Promise.all([
+  const [formatResponse, htmlFonts, tfms] = await Promise.all([
     fetch(plainFormatUrl),
     loadPlainWebFonts(),
+    loadPlainTfms(),
   ]);
   if (!formatResponse.ok) throw new Error(`Plain format request failed: ${formatResponse.status}`);
   const format = new Uint8Array(await formatResponse.arrayBuffer());
@@ -105,6 +171,7 @@ export async function createPlainWasmEngine(
   let mainDocId = "main";
   let projectFiles: ProjectFile[] = [];
   let needsColdStart = false;
+  const htmlFontsByName = new Map(htmlFonts.map((font) => [font.name, font]));
 
   const diagnostic = (epoch: number, message: string) => {
     emit({
@@ -118,11 +185,50 @@ export async function createPlainWasmEngine(
   const advance = (epoch: number): boolean => {
     if (!session) return false;
     emit({ t: "progress", epoch, phase: "typesetting" });
-    const result = session.advance();
-    if (result.kind === "need-resources") {
-      const names = result.required.map(resourceName).join(", ");
-      diagnostic(epoch, `The quick Plain demo does not bundle resource: ${names}`);
-      return false;
+    let result = session.advance();
+    while (result.kind === "need-resources") {
+      const responses: ResourceResponse[] = [];
+      const missing: ResourceRequest[] = [];
+      for (const request of result.required) {
+        if (request.type === "file") {
+          const bytes = tfms.get(request.name);
+          if (!bytes) {
+            missing.push(request);
+            continue;
+          }
+          responses.push({
+            type: "file",
+            kind: request.kind,
+            name: request.name,
+            virtualPath: `/texlive/fonts/tfm/${request.name}`,
+            bytes,
+          });
+          continue;
+        }
+        const font = htmlFontsByName.get(request.logicalName);
+        if (!font) {
+          missing.push(request);
+          continue;
+        }
+        responses.push({
+          type: "font",
+          logicalName: request.logicalName,
+          faceIndex: request.faceIndex,
+          variations: request.variations,
+          features: request.features,
+          container: "woff2",
+          bytes: font.woff2,
+          objectSha256: font.sha256,
+          provenance: font.provenance,
+        });
+      }
+      if (missing.length > 0) {
+        const names = missing.map(resourceName).join(", ");
+        diagnostic(epoch, `The quick Plain demo does not bundle resource: ${names}`);
+        return false;
+      }
+      session.provideResources(responses);
+      result = session.advance();
     }
     if (result.kind === "error") {
       diagnostic(epoch, result.diagnostic.message);

@@ -1,0 +1,9 @@
+Computer Modern TFM metrics
+Copyright (c) 1983 Donald E. Knuth
+
+The packaged cmbx10.tfm, cmcsc10.tfm, cmr10.tfm, cmss10.tfm,
+cmsl10.tfm, cmti10.tfm, and cmtt10.tfm files are unmodified copies
+from the Computer Modern distribution in TeX Live (package `cm`).
+
+TeX Live identifies this distribution under the Knuth license:
+https://ctan.org/license/knuth

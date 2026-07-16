@@ -1,9 +1,10 @@
 Copyright (c) 1997, 2009, American Mathematical Society (http://www.ams.org).
 All Rights Reserved.
 
-The source fonts used here reserve the names cmr10, cmr7, cmr5, cmmi10,
-cmmi7, cmmi5, cmsy10, cmsy7, cmsy5, and cmex10. The converted fonts use
-the distinct primary name "Umber CM Web".
+The source fonts used here reserve the names cmbx10, cmcsc10, cmex10,
+cmmi10, cmmi7, cmmi5, cmr10, cmr7, cmr5, cmss10, cmsl10, cmsy10,
+cmsy7, cmsy5, cmti10, and cmtt10. The converted fonts use the distinct
+primary name "Umber CM Web".
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:

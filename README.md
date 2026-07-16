@@ -15,15 +15,17 @@ npm run dev
 The default demo uses the locally built `@umber/umber-wasm` package, its bundled Plain format,
 and metric-compatible Computer Modern web fonts. It does not require a TeX Live bundle server.
 
-The checked-in WOFF2 files are generated from the canonical AMS Type 1 fonts distributed with
-TeX Live. To reproduce them with FontForge installed:
+The checked-in WOFF2 files are generated from the canonical AMS Type 1 fonts distributed under
+the SIL Open Font License with TeX Live. The same command also copies the verified, unmodified
+Computer Modern TFM metrics distributed under the Knuth license and needed by the packaged Plain
+text faces. To reproduce both sets with FontForge installed:
 
 ```sh
 SOURCE_DATE_EPOCH=0 fontforge -script scripts/build-cm-woff2.py
 ```
 
-The generator verifies every source PFB hash, assigns stable Unicode/Private Use mappings for
-TeX font slots, and renames the modified faces as required by the SIL Open Font License.
+The generator verifies every source PFB and TFM hash, assigns stable Unicode/Private Use mappings
+for TeX font slots, and renames the modified faces as required by the SIL Open Font License.
 
 Verification:
 
