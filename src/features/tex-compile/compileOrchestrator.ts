@@ -12,6 +12,13 @@ type DocumentState = {
   pendingEpoch?: number;
 };
 
+type OpenProject = {
+  files: ProjectFile[];
+  entry: string;
+  compileMode: import("./protocol").CompileMode;
+  editableDocIds?: ReadonlySet<string>;
+};
+
 export class CompileOrchestrator {
   readonly #session: CompileSession;
   readonly #documents = new Map<string, DocumentState>();
@@ -37,15 +44,15 @@ export class CompileOrchestrator {
     this.#session.send({ t: "renderedSource", requestId, page, event, unit });
   }
 
-  initialize(
-    init: Extract<ToEngine, { t: "init" }>,
-    project: {
-      files: ProjectFile[];
-      entry: string;
-      compileMode: import("./protocol").CompileMode;
-      editableDocIds?: ReadonlySet<string>;
-    },
-  ): void {
+  initialize(init: Extract<ToEngine, { t: "init" }>, project: OpenProject): void {
+    this.#session.send(init);
+    this.openProject(project);
+  }
+
+  openProject(project: OpenProject): void {
+    this.#documents.clear();
+    this.#saturated = false;
+    this.#editEpoch = 0;
     const decoder = new TextDecoder();
     for (const file of project.files) {
       if (project.editableDocIds && !project.editableDocIds.has(file.docId)) continue;
@@ -53,8 +60,7 @@ export class CompileOrchestrator {
       this.#documents.set(file.docId, { engineText: text, localText: text });
     }
     const retainedFiles = project.files.map((file) => ({ ...file, bytes: file.bytes.slice(0) }));
-    this.#session.send(init);
-    this.#session.send({
+    this.#session.openProject({
       t: "openProject",
       entry: project.entry,
       compileMode: project.compileMode,

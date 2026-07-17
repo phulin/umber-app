@@ -57,3 +57,40 @@ describe("Workspace recovery notice", () => {
     expect(root.querySelector('[role="alert"]')).toBeNull();
   });
 });
+
+describe("Workspace compile format", () => {
+  it("persists an explicit selection and reopens the project in that mode", async () => {
+    const root = document.createElement("div");
+    document.body.append(root);
+    const transport = new FakeEngineTransport();
+    const selectedModes: string[] = [];
+
+    dispose = render(
+      () =>
+        createComponent(Workspace, {
+          name: "Format test",
+          documents: [{ id: "main", path: "main.tex", text: "Hello" }],
+          entry: "main.tex",
+          compileMode: "plain",
+          engineTransport: transport,
+          onCompileModeChange: (mode) => {
+            selectedModes.push(mode);
+          },
+        }),
+      root,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const select = root.querySelector<HTMLSelectElement>('[aria-label="Project compile format"]');
+    if (!select) throw new Error("Compile format setting not rendered");
+    select.value = "latex";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(selectedModes).toEqual(["latex"]);
+    expect(transport.received.at(-1)).toMatchObject({
+      t: "openProject",
+      compileMode: "latex",
+    });
+  });
+});

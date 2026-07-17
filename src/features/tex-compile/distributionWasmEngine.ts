@@ -1,4 +1,5 @@
 import initWasm, {
+  type CompileOutput,
   CompilerSession,
   formatSchemaVersion,
   type HtmlFontInput,
@@ -42,11 +43,14 @@ import {
   type Woff2OpenTypeFont,
   Woff2OpenTypeResolver,
 } from "./fontResourceResolvers";
-import type { FromEngine, ProjectFile, ToEngine } from "./protocol";
 import {
-  CompileAbortCoordinator,
-  resolveResourceBatch,
-} from "./resourceResolution";
+  collectGeneratedFiles,
+  generatedFileMapsEqual,
+  latexJobName,
+  MAX_LATEX_PASSES,
+} from "./latexPasses";
+import type { FromEngine, ProjectFile, ToEngine } from "./protocol";
+import { CompileAbortCoordinator, resolveResourceBatch } from "./resourceResolution";
 import type { IncrementalTexEngine } from "./wasmEngineAdapter";
 
 const plainFontAssets = {
@@ -228,10 +232,12 @@ export async function createDistributionWasmEngine(
   );
   const aborts = new CompileAbortCoordinator();
   let distributionRequest: Promise<HttpManifestResolver> | undefined;
+  let latexFormatRequest: Promise<Uint8Array> | undefined;
   let session: CompilerSession | undefined;
   let entry = "main.tex";
   let mainDocId = "main";
   let projectFiles: ProjectFile[] = [];
+  let generatedFiles = new Map<string, Uint8Array>();
   let compileMode: import("./protocol").CompileMode = "plain";
   let needsColdStart = false;
   let renderedSourceIdentity: { output: string; revision: number } | undefined;
@@ -262,15 +268,37 @@ export async function createDistributionWasmEngine(
 
   const resolveFormat = async () => {
     if (compileMode === "plain") return plainFormat;
-    const resolver = await distributionResolver();
-    return resolver.resolveFormat("latex", {
-      engineVersion: packageVersion(),
-      formatSchema: formatSchemaVersion(),
-    });
+    if (!latexFormatRequest) {
+      latexFormatRequest = distributionResolver()
+        .then((resolver) =>
+          resolver.resolveFormat("latex", {
+            engineVersion: packageVersion(),
+            formatSchema: formatSchemaVersion(),
+          }),
+        )
+        .catch((error: unknown) => {
+          latexFormatRequest = undefined;
+          throw error;
+        });
+    }
+    return latexFormatRequest;
   };
 
-  const advance = async (epoch: number): Promise<boolean> => {
-    if (!session) return false;
+  const publish = (epoch: number, output: CompileOutput) => {
+    const html = output.html;
+    if (!html) {
+      diagnostic(epoch, "Umber returned no HTML preview");
+      return false;
+    }
+    renderedSourceIdentity = readRenderedSourceIdentity(html);
+    emit({ t: "diagnostics", epoch, items: [] });
+    emit({ t: "document", epoch, html: html.slice().buffer });
+    emit({ t: "progress", epoch, phase: "idle" });
+    return true;
+  };
+
+  const advance = async (epoch: number): Promise<CompileOutput | undefined> => {
+    if (!session) return undefined;
     const signal = aborts.begin(epoch);
     emit({ t: "progress", epoch, phase: "typesetting" });
     try {
@@ -292,31 +320,21 @@ export async function createDistributionWasmEngine(
           result.prefetchHints,
           signal,
         );
-        if (signal.aborted) return false;
+        if (signal.aborted) return undefined;
         session.provideResources(responses);
         emit({ t: "progress", epoch, phase: "typesetting" });
         result = session.advance();
       }
       if (result.kind === "error") {
         diagnostic(epoch, result.diagnostic.message);
-        return false;
+        return undefined;
       }
-      const html = result.output.html;
-      if (!html) {
-        diagnostic(epoch, "Umber returned no HTML preview");
-        return false;
-      }
-      renderedSourceIdentity = readRenderedSourceIdentity(html);
-      const bytes = html.slice().buffer;
-      emit({ t: "diagnostics", epoch, items: [] });
-      emit({ t: "document", epoch, html: bytes });
-      emit({ t: "progress", epoch, phase: "idle" });
-      return true;
+      return result.output;
     } catch (error) {
-      if (signal.aborted) return false;
+      if (signal.aborted) return undefined;
       emit({ t: "telemetry", metric: "bundle-fetch-failure" });
       diagnostic(epoch, error instanceof Error ? error.message : String(error));
-      return false;
+      return undefined;
     } finally {
       aborts.finish(signal);
     }
@@ -332,6 +350,33 @@ export async function createDistributionWasmEngine(
     });
     for (const font of htmlFonts) session.addHtmlFont(font);
     for (const file of projectFiles) session.addUserFile(file.path, new Uint8Array(file.bytes));
+    const authoredPaths = new Set(projectFiles.map((file) => file.path));
+    for (const [path, bytes] of generatedFiles) {
+      if (!authoredPaths.has(path)) session.addUserFile(path, bytes);
+    }
+  };
+
+  const compilePasses = async (epoch: number): Promise<boolean> => {
+    let output = await advance(epoch);
+    if (!output) return false;
+    if (compileMode === "plain") return publish(epoch, output);
+
+    for (let pass = 1; pass <= MAX_LATEX_PASSES; pass += 1) {
+      const nextGenerated = collectGeneratedFiles(output);
+      const stable = generatedFileMapsEqual(generatedFiles, nextGenerated);
+      generatedFiles = nextGenerated;
+      if (stable || pass === MAX_LATEX_PASSES) return publish(epoch, output);
+      emit({
+        t: "progress",
+        epoch,
+        phase: "typesetting",
+        detail: `LaTeX pass ${pass + 1}/${MAX_LATEX_PASSES}`,
+      });
+      await createSession();
+      output = await advance(epoch);
+      if (!output) return false;
+    }
+    return false;
   };
 
   const open = async (
@@ -341,10 +386,14 @@ export async function createDistributionWasmEngine(
   ) => {
     entry = nextEntry;
     compileMode = nextCompileMode;
+    generatedFiles =
+      compileMode === "latex"
+        ? new Map([[`${latexJobName(entry)}.aux`, new Uint8Array()]])
+        : new Map();
     mainDocId = files.find((file) => file.path === entry)?.docId ?? files[0]?.docId ?? "main";
     projectFiles = files.map((file) => ({ ...file, bytes: file.bytes.slice(0) }));
     await createSession();
-    needsColdStart = !(await advance(0));
+    needsColdStart = !(await compilePasses(0));
   };
 
   const updateMainSource = (fromByte: number, toByte: number, insert: ArrayBuffer) => {
@@ -425,7 +474,7 @@ export async function createDistributionWasmEngine(
             await createSession();
           }
         }
-        needsColdStart = !(await advance(message.epoch));
+        needsColdStart = !(await compilePasses(message.epoch));
       }
     },
     dispose() {

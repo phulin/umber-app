@@ -60,6 +60,7 @@ type WorkspaceProps = {
   compileMode: CompileMode;
   readOnly?: boolean;
   project?: { id: string; store: ProjectStore; downloadable?: boolean };
+  onCompileModeChange?: (compileMode: CompileMode) => void | Promise<void>;
   onCopyDemo?: (documents: readonly WorkspaceDocument[]) => void | Promise<void>;
   engineTransport?: EngineTransport;
 };
@@ -182,6 +183,32 @@ export function Workspace(props: WorkspaceProps) {
     if (!props.readOnly) autosave?.schedule(document.path, new TextEncoder().encode(value));
   };
 
+  const changeCompileMode = async (compileMode: CompileMode) => {
+    if (compileMode === props.compileMode || !props.onCompileModeChange) return;
+    setEngineStatus(`Switching to ${compileMode === "latex" ? "LaTeX" : "Plain TeX"}…`);
+    try {
+      await autosave?.flush();
+      await props.onCompileModeChange(compileMode);
+      orchestrator.openProject({
+        entry: props.entry,
+        compileMode,
+        editableDocIds: new Set(documents.map((document) => document.id)),
+        files: workspaceProjectFiles(
+          documents.map((document) => ({
+            id: document.id,
+            path: document.path,
+            text: document.text(),
+          })),
+          props.binaryFiles ?? [],
+        ),
+      });
+    } catch (error) {
+      setEngineStatus(
+        `Format switch failed · ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  };
+
   const downloadProject = async () => {
     if (!props.project) return;
     await autosave?.flush();
@@ -300,6 +327,22 @@ export function Workspace(props: WorkspaceProps) {
           </Show>
         </div>
         <div class="workspace-actions">
+          <Show when={props.onCompileModeChange}>
+            <label class="compile-mode-setting">
+              <span>Format</span>
+              <select
+                aria-label="Project compile format"
+                value={props.compileMode}
+                disabled={props.readOnly}
+                onChange={(event) =>
+                  void changeCompileMode(event.currentTarget.value as CompileMode)
+                }
+              >
+                <option value="plain">Plain TeX</option>
+                <option value="latex">LaTeX</option>
+              </select>
+            </label>
+          </Show>
           <Show when={props.onCopyDemo}>
             <button
               type="button"

@@ -37,6 +37,12 @@ export class CompileSession {
     this.#transport.postMessage(message, transferablesFor(message));
   }
 
+  openProject(message: Extract<ToEngine, { t: "openProject" }>): void {
+    this.#editEpoch = 0;
+    this.#latestAppliedEpoch = 0;
+    this.send(message);
+  }
+
   edit(docId: string, fromByte: number, toByte: number, insertedText: string): number {
     const epoch = ++this.#editEpoch;
     this.editAtEpoch(epoch, docId, fromByte, toByte, insertedText);

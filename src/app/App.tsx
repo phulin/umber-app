@@ -6,6 +6,7 @@ import {
   OpfsProjectStore,
   type ProjectStore,
 } from "../features/projects/projectStore";
+import type { CompileMode } from "../features/tex-compile/protocol";
 import { Workspace, type WorkspaceBinaryFile, type WorkspaceDocument } from "./Workspace";
 
 const demoDocuments: WorkspaceDocument[] = [
@@ -140,12 +141,14 @@ function ProjectList(props: { store: ProjectStore }) {
 
 function ProjectScreen(props: { store: ProjectStore; id: string }) {
   let lease: ProjectLockLease | undefined;
+  const [compileMode, setCompileMode] = createSignal<CompileMode>("plain");
   const [project] = createResource(
     () => props.id,
     async (id) => {
       await lease?.release();
       const manifest = await props.store.getManifest(id);
       if (!manifest) throw new Error(`Project not found: ${id}`);
+      setCompileMode(manifest.compileMode);
       lease = await ProjectLockLease.acquire(id);
       const documents: WorkspaceDocument[] = [];
       const binaryFiles: WorkspaceBinaryFile[] = [];
@@ -170,9 +173,13 @@ function ProjectScreen(props: { store: ProjectStore; id: string }) {
           documents={loaded().documents}
           binaryFiles={loaded().binaryFiles}
           entry={loaded().manifest.entry}
-          compileMode={loaded().manifest.compileMode}
+          compileMode={compileMode()}
           readOnly={loaded().readOnly}
           project={{ id: loaded().manifest.id, store: props.store }}
+          onCompileModeChange={async (nextMode) => {
+            await props.store.setCompileMode(loaded().manifest.id, nextMode);
+            setCompileMode(nextMode);
+          }}
         />
       )}
     </Show>

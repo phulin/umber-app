@@ -48,6 +48,27 @@ describe("CompileOrchestrator", () => {
     orchestrator.dispose();
   });
 
+  it("reopens the current files with an explicitly selected format", () => {
+    const { transport, orchestrator } = setup();
+    orchestrator.openProject({
+      entry: "main.tex",
+      compileMode: "latex",
+      files: [
+        {
+          docId: "main",
+          path: "main.tex",
+          bytes: new TextEncoder().encode("latex source").buffer,
+        },
+      ],
+    });
+
+    expect(transport.received.at(-1)).toMatchObject({
+      t: "openProject",
+      compileMode: "latex",
+    });
+    orchestrator.dispose();
+  });
+
   it("coalesces edits that arrive before the worker reports saturation", () => {
     const { transport, orchestrator } = setup();
     orchestrator.submitEdit(delta(1, 1, "X"));

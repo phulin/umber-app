@@ -57,6 +57,25 @@ button {
   gap: 8px;
 }
 
+.compile-mode-setting {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #625b52;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.compile-mode-setting select {
+  min-height: 38px;
+  padding: 0 28px 0 10px;
+  border: 1px solid #cfc7bb;
+  border-radius: 6px;
+  color: #3e3a35;
+  background: #fffdf8;
+  font: inherit;
+}
+
 .topbar nav button,
 .workspace-actions button,
 .refresh-projects {
