@@ -43,83 +43,104 @@ const plainFontAssets = {
   cmbx10: {
     url: cmbx10FontUrl,
     tfmContentHash: "06aff5c4e3836465b7ccf9ca03e956f3445e21c705c99a10d084cfb38c63a450",
-    sha256: "78e2f037e12d987cc5fb1c4711e816f1e218e536b4a48750e3aae322de7623f1",
+    sha256: "d08140bf2e7c5db22bec1c40ef967c1aa03e10a8447830663762407ceb5fd974",
+    source: "cmu",
   },
   cmcsc10: {
     url: cmcsc10FontUrl,
     tfmContentHash: "582c4da9bc3fc34d63199758881686f9a779b651d73e4cb5aaced37eed818872",
-    sha256: "ffd99bc9524d0461a94f1caaa39c7dc6a13806a0d57b62f0222abd23183033b4",
+    sha256: "4549208774204c8e57a75398d887d62739e5d2f88792dd1c38f815961f2bcae2",
+    source: "cmu",
   },
   cmr10: {
     url: cmr10FontUrl,
     tfmContentHash: "b5aae7453493c924123050ddf8e85ab3395b46099e44f4fa6f39c55bb526b89e",
-    sha256: "0b9773b781bc686919dea8708a3c8960de03732d7a8c3fabd93b8b2fc7ba004e",
+    sha256: "13279262f0c17ee798af7c581c1e4acd2c317e30000279c3985d8e343af977dd",
+    source: "cmu",
   },
   cmr7: {
     url: cmr7FontUrl,
     tfmContentHash: "3b2be343f00c1b8bb50c817b6e8687009b8925c17f9156c333ebfcf09c620a8e",
-    sha256: "6e9d5eb5aae685d362607e48add0cba11899dfa7b3cf066664cccd396e71475f",
+    sha256: "417bc403521c2f174f7ee903e6e3657f8e12587f69fb5c62272ac4d8897e8b3a",
+    source: "cmu",
   },
   cmr5: {
     url: cmr5FontUrl,
     tfmContentHash: "e863cad4a7654e909cd4b3cf7b9b9c40a3be72d2c14c3f533ad86e37811b1463",
-    sha256: "8f1f955020ca98457e9364365e16da0023dda39550d34f46b7c7868c3d58c4e6",
+    sha256: "c862527cd6b58a375edd4e6739f7bc537e9eb3c03565853fd051aa066b0f88a3",
+    source: "cmu",
   },
   cmmi10: {
     url: cmmi10FontUrl,
     tfmContentHash: "e4cb492dd7cf8cf673a47439db3635bd4b257d74aee12d3a2c1d1407eab1d0d6",
-    sha256: "758a5b65770f1b40a40ca7a51a3c5aa735d21bb814a4d24497849e0c6570e4e4",
+    sha256: "a552d56d5c883f0b3d5120111cc279fa61204c7e0307cc03fea552e20060e851",
+    source: "ams",
   },
   cmmi7: {
     url: cmmi7FontUrl,
     tfmContentHash: "eb08a7381c9f9d23035e6ae91d6252e34036595272f2cb1fd5bb8c8ac9902981",
-    sha256: "6a5c575b5902e915f897818777d211e28e2f47ea6b432f311c7614d4e1fc98f5",
+    sha256: "2d5d778d9112cf3b88b1c3fbbbe2b3bd8f499eb3fab3f42317363888bec40cfb",
+    source: "ams",
   },
   cmmi5: {
     url: cmmi5FontUrl,
     tfmContentHash: "bd5205eddec6aa8ea6adc314a7d0b4792d918075eccbff89e9c74a20fe93dbeb",
-    sha256: "51f9008a05c20bda3d3d4296ab2e3534466818215eb36f8ae3845cf703fb3445",
+    sha256: "5b7c2914f9f005f9c416564ab9b3aa08cd2c53c96eee893e9a235f32e35b632e",
+    source: "ams",
   },
   cmsy10: {
     url: cmsy10FontUrl,
     tfmContentHash: "585ad2f2bbd3e8471de6b1af83a8cabcc21cd874f545ca3da9a0e6afd4873a59",
-    sha256: "f4063bb0111469e22519f0a5396183c26ed98d2e8722eca92a098f14688b1f5b",
+    sha256: "66f14d36d5dffbee155be0578671c11ff995fe22a6fe0d8afbe02d12d8725b90",
+    source: "ams",
   },
   cmsy7: {
     url: cmsy7FontUrl,
     tfmContentHash: "2b7d8a1dffcb2b1fd72270caf8ca7c013f89e389f710dd963394c9dbb3f26d43",
-    sha256: "61db117f829d84528263a6bbdcb1c6955b2e443e448c54792fc6c117254c5222",
+    sha256: "4609c1f12e55a75702b276e52936819d33a387ca6abd0cf6a2337ea42337b472",
+    source: "ams",
   },
   cmsy5: {
     url: cmsy5FontUrl,
     tfmContentHash: "a67a6d62bcc83ec51ee918ebb4da69b8bdac229b502e28c812b54524828b0691",
-    sha256: "a02b63a902739e89ed102f4e9bbfe802e97ccb393d98d0feb5ffa0044dd08f96",
+    sha256: "6702b4829c5c50ffd554782adc4028c8db550365b2901f7ac0ed1eb7036668f9",
+    source: "ams",
   },
   cmex10: {
     url: cmex10FontUrl,
     tfmContentHash: "5a970fbe0d95cf8f27aaf9a8a64a0b6f33d53719c512f0e4bcb1bbc93e1ca799",
-    sha256: "3d5725384248283ddc39691028aac1d665e2bb13638c0207329a55f2e2bf6b9a",
+    sha256: "6dc0d0a4e45f188b20b1ab5b07ea507849b8fad8369dc972805a519813d72006",
+    source: "ams",
   },
   cmss10: {
     url: cmss10FontUrl,
     tfmContentHash: "e7dfd2d5819e1ee9f40ea4101caee6c7c72bbb174c7a43f7703d609a3ecd31ad",
-    sha256: "6392014aa973e1d2039417619c2bea03fbb24950bf4186d8ffbd3d74e0e7fbf9",
+    sha256: "030044d4f9231be9aff5f80f3cee86cad6abfdc749196d8b0a356a204a077d6e",
+    source: "cmu",
   },
   cmsl10: {
     url: cmsl10FontUrl,
     tfmContentHash: "85590e7d62adfdb92a9bdb41423238b0291d86655af7ee79fa4c4bf03b24ab9e",
-    sha256: "2ec9b788471cd2de014c1f398dc133135d54aaac34f6fa0ef632d27cdd03a9ff",
+    sha256: "a415f06695f8e2a617ff525ab65cfac42d3c1fff39783e25dd58e6db0a9c4045",
+    source: "cmu",
   },
   cmti10: {
     url: cmti10FontUrl,
     tfmContentHash: "4aef58b6c92d599d3106aaa3b5b6cb74c62870e88dab66cfc1449cd7968d3391",
-    sha256: "48f8e8ebefc23522442d94641222de0cdacbbbaebad3b3869a353bc8dca3102a",
+    sha256: "0b8372cdad7af2ee15d0f38003e3de8e8894d4210ff124bab0a78d9fb8e41cdc",
+    source: "cmu",
   },
   cmtt10: {
     url: cmtt10FontUrl,
     tfmContentHash: "a6046ee8cbd073ca93ca3f1d99c01beaf63e483d61bc9e5bfa103433340d4909",
-    sha256: "836f6af849aca4e75be97bf18ecba25166f7c1a80d7ae592850748c24501a828",
+    sha256: "247d2a8eeaf5f1481a43554c33e9907172571d474ee697bd9d3389f2707dd551",
+    source: "cmu",
   },
+} as const;
+
+const plainFontProvenance = {
+  cmu: "Computer Modern Unicode 0.7.0 converted under SIL OFL 1.1",
+  ams: "AMS Computer Modern Type1 fonts converted under SIL OFL 1.1",
 } as const;
 
 const plainTfmAssetUrls = {
@@ -143,7 +164,7 @@ async function loadPlainFonts(): Promise<LoadedPlainFont[]> {
       const response = await fetch(asset.url);
       if (!response.ok) throw new Error(`Plain ${name} font request failed: ${response.status}`);
       const woff2 = new Uint8Array(await response.arrayBuffer());
-      const provenance = "AMS Computer Modern Type1 fonts converted under SIL OFL 1.1";
+      const provenance = plainFontProvenance[asset.source];
       return {
         openType: {
           logicalName: name,
