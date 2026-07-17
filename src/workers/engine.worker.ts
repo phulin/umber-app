@@ -2,7 +2,7 @@ import { BundleResolver } from "../features/resources/bundleResolver";
 import { scanTexDependencies } from "../features/resources/dependencyScanner";
 import { createResourceCache, type ResourceCache } from "../features/resources/resourceCache";
 import { WorkerSyncResourceCache } from "../features/resources/syncResourceCache";
-import { createPlainWasmEngine } from "../features/tex-compile/plainWasmEngine";
+import { createDistributionWasmEngine } from "../features/tex-compile/distributionWasmEngine";
 import {
   decodeToEngine,
   type FromEngine,
@@ -51,7 +51,7 @@ async function boot(message: Extract<ToEngine, { t: "init" }>): Promise<void> {
   await engine?.dispose();
   if (message.engineOpts.mode === "plain-demo") {
     activeResolver = undefined;
-    engine = await createPlainWasmEngine(emit);
+    engine = await createDistributionWasmEngine(emit);
     await engine.handle(message);
     return;
   }

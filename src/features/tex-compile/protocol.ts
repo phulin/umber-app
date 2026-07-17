@@ -1,4 +1,5 @@
 export type EngineOptions = Record<string, unknown>;
+export type CompileMode = "plain" | "latex";
 
 export type ProjectFile = {
   docId: string;
@@ -26,7 +27,7 @@ export type RenderedSourceLocation = {
 
 export type ToEngine =
   | { t: "init"; bundleDigest: string; engineOpts: EngineOptions }
-  | { t: "openProject"; files: ProjectFile[]; entry: string }
+  | { t: "openProject"; files: ProjectFile[]; entry: string; compileMode: CompileMode }
   | EditMessage
   | { t: "cancel"; beforeEpoch: number }
   | { t: "fileAdd"; docId: string; path: string; bytes: ArrayBuffer }
@@ -272,7 +273,10 @@ export function decodeToEngine(value: unknown): ToEngine | null {
         ? (value as ToEngine)
         : null;
     case "openProject":
-      return Array.isArray(value.files) && value.files.every(isProjectFile) && isString(value.entry)
+      return Array.isArray(value.files) &&
+        value.files.every(isProjectFile) &&
+        isString(value.entry) &&
+        (value.compileMode === "plain" || value.compileMode === "latex")
         ? (value as ToEngine)
         : null;
     case "edit":

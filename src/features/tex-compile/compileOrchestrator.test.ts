@@ -19,6 +19,7 @@ const setup = () => {
     { t: "init", bundleDigest: "bundle", engineOpts: {} },
     {
       entry: "main.tex",
+      compileMode: "plain",
       files: [
         {
           docId: "main",
@@ -100,6 +101,7 @@ describe("CompileOrchestrator", () => {
       { t: "init", bundleDigest: "bundle", engineOpts: {} },
       {
         entry: "main.tex",
+        compileMode: "plain",
         editableDocIds: new Set(["main"]),
         files: [
           { docId: "main", path: "main.tex", bytes: new TextEncoder().encode("main").buffer },

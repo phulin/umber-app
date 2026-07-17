@@ -39,7 +39,12 @@ export class CompileOrchestrator {
 
   initialize(
     init: Extract<ToEngine, { t: "init" }>,
-    project: { files: ProjectFile[]; entry: string; editableDocIds?: ReadonlySet<string> },
+    project: {
+      files: ProjectFile[];
+      entry: string;
+      compileMode: import("./protocol").CompileMode;
+      editableDocIds?: ReadonlySet<string>;
+    },
   ): void {
     const decoder = new TextDecoder();
     for (const file of project.files) {
@@ -49,7 +54,12 @@ export class CompileOrchestrator {
     }
     const retainedFiles = project.files.map((file) => ({ ...file, bytes: file.bytes.slice(0) }));
     this.#session.send(init);
-    this.#session.send({ t: "openProject", entry: project.entry, files: retainedFiles });
+    this.#session.send({
+      t: "openProject",
+      entry: project.entry,
+      compileMode: project.compileMode,
+      files: retainedFiles,
+    });
   }
 
   submitEdit(delta: EditorDelta): void {

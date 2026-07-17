@@ -24,6 +24,7 @@ import {
   RestartableEngineTransport,
 } from "../features/tex-compile/engineTransport";
 import type {
+  CompileMode,
   Diagnostic,
   ProjectFile,
   RenderedSourceLocation,
@@ -56,6 +57,7 @@ type WorkspaceProps = {
   documents: readonly WorkspaceDocument[];
   binaryFiles?: readonly WorkspaceBinaryFile[];
   entry: string;
+  compileMode: CompileMode;
   readOnly?: boolean;
   project?: { id: string; store: ProjectStore; downloadable?: boolean };
   onCopyDemo?: (documents: readonly WorkspaceDocument[]) => void | Promise<void>;
@@ -266,6 +268,7 @@ export function Workspace(props: WorkspaceProps) {
       },
       {
         entry: props.entry,
+        compileMode: props.compileMode,
         editableDocIds: new Set(documents.map((document) => document.id)),
         files: workspaceProjectFiles(
           documents.map((document) => ({

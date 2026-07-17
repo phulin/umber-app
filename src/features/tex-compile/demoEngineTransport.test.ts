@@ -13,6 +13,7 @@ describe("interactive demo engine", () => {
     transport.postMessage({
       t: "openProject",
       entry: "main.tex",
+      compileMode: "plain",
       files: [
         {
           docId: "main",

@@ -1,4 +1,6 @@
-export type ProjectCompileMode = "plain" | "latex";
+import type { CompileMode } from "../tex-compile/protocol";
+
+export type ProjectCompileMode = CompileMode;
 
 export type ProjectManifest = {
   id: string;

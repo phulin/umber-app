@@ -15,6 +15,7 @@ describe("RestartableEngineTransport", () => {
     restartable.postMessage({
       t: "openProject",
       entry: "main.tex",
+      compileMode: "latex",
       files: [{ docId: "main", path: "main.tex", bytes: projectBytes }],
     });
     restartable.postMessage({
@@ -56,6 +57,7 @@ describe("RestartableEngineTransport", () => {
     restartable.postMessage({
       t: "openProject",
       entry: "main.tex",
+      compileMode: "plain",
       files: [{ docId: "main", path: "main.tex", bytes: new ArrayBuffer(1) }],
     });
 

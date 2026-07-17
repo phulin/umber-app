@@ -44,6 +44,7 @@ describe("Workspace recovery notice", () => {
           name: "Recovery test",
           documents: [{ id: "main", path: "main.tex", text: "Hello" }],
           entry: "main.tex",
+          compileMode: "plain",
           engineTransport: transport,
         }),
       root,

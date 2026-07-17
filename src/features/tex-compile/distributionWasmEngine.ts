@@ -1,5 +1,6 @@
 import initWasm, {
   CompilerSession,
+  formatSchemaVersion,
   type HtmlFontInput,
   packageVersion,
   type ResourceRequest,
@@ -44,7 +45,6 @@ import {
 import type { FromEngine, ProjectFile, ToEngine } from "./protocol";
 import {
   CompileAbortCoordinator,
-  type DistributionResolver,
   resolveResourceBatch,
 } from "./resourceResolution";
 import type { IncrementalTexEngine } from "./wasmEngineAdapter";
@@ -210,7 +210,7 @@ async function loadPlainTfms(): Promise<TfmResource[]> {
   );
 }
 
-export async function createPlainWasmEngine(
+export async function createDistributionWasmEngine(
   emit: (message: FromEngine) => void,
 ): Promise<IncrementalTexEngine> {
   await initWasm();
@@ -220,18 +220,19 @@ export async function createPlainWasmEngine(
     loadPlainTfms(),
   ]);
   if (!formatResponse.ok) throw new Error(`Plain format request failed: ${formatResponse.status}`);
-  const format = new Uint8Array(await formatResponse.arrayBuffer());
+  const plainFormat = new Uint8Array(await formatResponse.arrayBuffer());
   const htmlFonts = fonts.map((font) => font.html);
   const fontResources = new FontResourceRouter(
     new TfmResourceResolver(tfms),
     new Woff2OpenTypeResolver(fonts.map((font) => font.openType)),
   );
   const aborts = new CompileAbortCoordinator();
-  let distributionRequest: Promise<DistributionResolver> | undefined;
+  let distributionRequest: Promise<HttpManifestResolver> | undefined;
   let session: CompilerSession | undefined;
   let entry = "main.tex";
   let mainDocId = "main";
   let projectFiles: ProjectFile[] = [];
+  let compileMode: import("./protocol").CompileMode = "plain";
   let needsColdStart = false;
   let renderedSourceIdentity: { output: string; revision: number } | undefined;
 
@@ -244,7 +245,7 @@ export async function createPlainWasmEngine(
     emit({ t: "progress", epoch, phase: "idle" });
   };
 
-  const distributionResolver = (signal: AbortSignal): Promise<DistributionResolver> => {
+  const distributionResolver = (signal?: AbortSignal): Promise<HttpManifestResolver> => {
     if (!distributionRequest) {
       distributionRequest = HttpManifestResolver.create({
         manifestUrl: TEXLIVE_2026_MANIFEST_URL,
@@ -257,6 +258,15 @@ export async function createPlainWasmEngine(
       });
     }
     return distributionRequest;
+  };
+
+  const resolveFormat = async () => {
+    if (compileMode === "plain") return plainFormat;
+    const resolver = await distributionResolver();
+    return resolver.resolveFormat("latex", {
+      engineVersion: packageVersion(),
+      formatSchema: formatSchemaVersion(),
+    });
   };
 
   const advance = async (epoch: number): Promise<boolean> => {
@@ -312,22 +322,28 @@ export async function createPlainWasmEngine(
     }
   };
 
-  const createSession = () => {
+  const createSession = async () => {
     session?.dispose();
     session = new CompilerSession({
       mainPath: entry,
-      format,
+      format: await resolveFormat(),
+      engine: compileMode === "latex" ? "latex" : "tex82",
       html: { fonts: [] },
     });
     for (const font of htmlFonts) session.addHtmlFont(font);
     for (const file of projectFiles) session.addUserFile(file.path, new Uint8Array(file.bytes));
   };
 
-  const open = async (files: ProjectFile[], nextEntry: string) => {
+  const open = async (
+    files: ProjectFile[],
+    nextEntry: string,
+    nextCompileMode: import("./protocol").CompileMode,
+  ) => {
     entry = nextEntry;
+    compileMode = nextCompileMode;
     mainDocId = files.find((file) => file.path === entry)?.docId ?? files[0]?.docId ?? "main";
     projectFiles = files.map((file) => ({ ...file, bytes: file.bytes.slice(0) }));
-    createSession();
+    await createSession();
     needsColdStart = !(await advance(0));
   };
 
@@ -355,7 +371,7 @@ export async function createPlainWasmEngine(
         return;
       }
       if (message.t === "openProject") {
-        await open(message.files, message.entry);
+        await open(message.files, message.entry, message.compileMode);
         return;
       }
       if (message.t === "renderedSource") {
@@ -394,7 +410,7 @@ export async function createPlainWasmEngine(
         const expectedHash = session.contentHash;
         updateMainSource(message.fromByte, message.toByte, message.insert);
         if (needsColdStart || revision === undefined || expectedHash === undefined) {
-          createSession();
+          await createSession();
         } else {
           try {
             session.applyPatch({
@@ -406,7 +422,7 @@ export async function createPlainWasmEngine(
               replacement: new TextDecoder().decode(message.insert),
             });
           } catch {
-            createSession();
+            await createSession();
           }
         }
         needsColdStart = !(await advance(message.epoch));

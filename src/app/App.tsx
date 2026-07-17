@@ -170,6 +170,7 @@ function ProjectScreen(props: { store: ProjectStore; id: string }) {
           documents={loaded().documents}
           binaryFiles={loaded().binaryFiles}
           entry={loaded().manifest.entry}
+          compileMode={loaded().manifest.compileMode}
           readOnly={loaded().readOnly}
           project={{ id: loaded().manifest.id, store: props.store }}
         />
@@ -213,6 +214,7 @@ function DemoScreen(props: {
           name="Try Umber"
           documents={loaded().documents}
           entry={loaded().manifest.entry}
+          compileMode={loaded().manifest.compileMode}
           project={{ id: "demo", store: props.scratchStore, downloadable: false }}
           onCopyDemo={props.onCopy}
         />

@@ -90,6 +90,7 @@ describe("CompileSession", () => {
     session.send({
       t: "openProject",
       entry: "main.tex",
+      compileMode: "plain",
       files: [
         {
           docId: "main",
