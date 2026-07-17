@@ -21,5 +21,6 @@ describe("App", () => {
 
     expect(root.textContent).toContain("Browser-native TeX");
     expect(root.textContent).toContain("HTML Preview");
+    expect(root.querySelector('[aria-label="Project compile format"]')).not.toBeNull();
   });
 });

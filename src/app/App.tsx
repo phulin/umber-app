@@ -190,6 +190,7 @@ function DemoScreen(props: {
   scratchStore: ProjectStore;
   onCopy: (documents: readonly WorkspaceDocument[]) => void | Promise<void>;
 }) {
+  const [compileMode, setCompileMode] = createSignal<CompileMode>("plain");
   const [demo] = createResource(async () => {
     let manifest = await props.scratchStore.getManifest("demo");
     if (!manifest) {
@@ -203,6 +204,7 @@ function DemoScreen(props: {
         ),
       });
     }
+    setCompileMode(manifest.compileMode);
     const documents: WorkspaceDocument[] = [];
     for (const path of manifest.files.filter((file) => /\.(tex|bib|sty|cls|md|txt)$/i.test(file))) {
       documents.push({
@@ -221,8 +223,12 @@ function DemoScreen(props: {
           name="Try Umber"
           documents={loaded().documents}
           entry={loaded().manifest.entry}
-          compileMode={loaded().manifest.compileMode}
+          compileMode={compileMode()}
           project={{ id: "demo", store: props.scratchStore, downloadable: false }}
+          onCompileModeChange={async (nextMode) => {
+            await props.scratchStore.setCompileMode("demo", nextMode);
+            setCompileMode(nextMode);
+          }}
           onCopyDemo={props.onCopy}
         />
       )}
