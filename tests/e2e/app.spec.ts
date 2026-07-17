@@ -183,7 +183,7 @@ $$\sum_{x}^{y} f(x).$$\bye`,
   await expect(page.getByText("No diagnostics.")).toBeVisible();
 });
 
-test("renders packaged Plain TeX text faces", async ({ page }) => {
+test("renders packaged TFM and OpenType-only text faces", async ({ page }) => {
   await page.goto("/");
   const editor = page.locator('[role="textbox"]:visible');
   const preview = page.frameLocator("iframe.standalone-preview");
@@ -198,6 +198,7 @@ test("renders packaged Plain TeX text faces", async ({ page }) => {
 \font\sc=cmcsc10 \sc Small Caps\par
 \font\sf=cmss10 \sf Sans Serif\par
 \font\roman=cmr10 \roman Roman\par
+\font\unicode=opentype:cmr10 \unicode OpenType only\par
 \bye`,
   );
 
@@ -205,6 +206,7 @@ test("renders packaged Plain TeX text faces", async ({ page }) => {
   await expect(preview.locator("body")).toContainText("Small Caps");
   await expect(preview.locator("body")).toContainText("Sans Serif");
   await expect(preview.locator("body")).toContainText("Roman");
+  await expect(preview.locator("body")).toContainText("OpenType only");
   await expect(page.getByText("No diagnostics.")).toBeVisible();
   await expect(page.getByText(/Engine recovery started automatically/)).toHaveCount(0);
 });

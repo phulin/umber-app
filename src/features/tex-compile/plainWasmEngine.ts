@@ -3,7 +3,6 @@ import initWasm, {
   type HtmlFontInput,
   packageVersion,
   type ResourceRequest,
-  type ResourceResponse,
 } from "@umber/umber-wasm/low-level";
 import plainFormatUrl from "@umber/umber-wasm/plain.fmt?url";
 import fontEncodings from "../../assets/fonts/encodings.json";
@@ -30,6 +29,13 @@ import cmsl10TfmUrl from "../../assets/tfm/cmsl10.tfm?url";
 import cmss10TfmUrl from "../../assets/tfm/cmss10.tfm?url";
 import cmti10TfmUrl from "../../assets/tfm/cmti10.tfm?url";
 import cmtt10TfmUrl from "../../assets/tfm/cmtt10.tfm?url";
+import {
+  FontResourceRouter,
+  type TfmResource,
+  TfmResourceResolver,
+  type Woff2OpenTypeFont,
+  Woff2OpenTypeResolver,
+} from "./fontResourceResolvers";
 import type { FromEngine, ProjectFile, ToEngine } from "./protocol";
 import type { IncrementalTexEngine } from "./wasmEngineAdapter";
 
@@ -126,52 +132,75 @@ const plainTfmAssetUrls = {
   "cmtt10.tfm": cmtt10TfmUrl,
 } as const;
 
-async function loadPlainWebFonts(): Promise<HtmlFontInput[]> {
+type LoadedPlainFont = {
+  openType: Woff2OpenTypeFont;
+  html: HtmlFontInput;
+};
+
+async function loadPlainFonts(): Promise<LoadedPlainFont[]> {
   return Promise.all(
     Object.entries(plainFontAssets).map(async ([name, asset]) => {
       const response = await fetch(asset.url);
       if (!response.ok) throw new Error(`Plain ${name} font request failed: ${response.status}`);
+      const woff2 = new Uint8Array(await response.arrayBuffer());
+      const provenance = "AMS Computer Modern Type1 fonts converted under SIL OFL 1.1";
       return {
-        name,
-        tfmContentHash: asset.tfmContentHash,
-        woff2: new Uint8Array(await response.arrayBuffer()),
-        sha256: asset.sha256,
-        encoding: fontEncodings[name as keyof typeof fontEncodings],
-        provenance: "AMS Computer Modern Type1 fonts converted under SIL OFL 1.1",
-        embeddable: true,
+        openType: {
+          logicalName: name,
+          woff2,
+          objectSha256: asset.sha256,
+          provenance,
+        },
+        html: {
+          name,
+          tfmContentHash: asset.tfmContentHash,
+          woff2,
+          sha256: asset.sha256,
+          encoding: fontEncodings[name as keyof typeof fontEncodings],
+          provenance,
+          embeddable: true,
+        },
       };
     }),
   );
 }
 
-async function loadPlainTfms(): Promise<Map<string, Uint8Array>> {
-  const entries = await Promise.all(
+async function loadPlainTfms(): Promise<TfmResource[]> {
+  return Promise.all(
     Object.entries(plainTfmAssetUrls).map(async ([name, url]) => {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`Plain ${name} request failed: ${response.status}`);
-      return [name, new Uint8Array(await response.arrayBuffer())] as const;
+      return {
+        name,
+        virtualPath: `/texlive/fonts/tfm/${name}`,
+        bytes: new Uint8Array(await response.arrayBuffer()),
+      };
     }),
   );
-  return new Map(entries);
 }
 
 export async function createPlainWasmEngine(
   emit: (message: FromEngine) => void,
 ): Promise<IncrementalTexEngine> {
   await initWasm();
-  const [formatResponse, htmlFonts, tfms] = await Promise.all([
+  const [formatResponse, fonts, tfms] = await Promise.all([
     fetch(plainFormatUrl),
-    loadPlainWebFonts(),
+    loadPlainFonts(),
     loadPlainTfms(),
   ]);
   if (!formatResponse.ok) throw new Error(`Plain format request failed: ${formatResponse.status}`);
   const format = new Uint8Array(await formatResponse.arrayBuffer());
+  const htmlFonts = fonts.map((font) => font.html);
+  const fontResources = new FontResourceRouter(
+    new TfmResourceResolver(tfms),
+    new Woff2OpenTypeResolver(fonts.map((font) => font.openType)),
+  );
   let session: CompilerSession | undefined;
   let entry = "main.tex";
   let mainDocId = "main";
   let projectFiles: ProjectFile[] = [];
   let needsColdStart = false;
-  const htmlFontsByName = new Map(htmlFonts.map((font) => [font.name, font]));
+  let renderedSourceIdentity: { output: string; revision: number } | undefined;
 
   const diagnostic = (epoch: number, message: string) => {
     emit({
@@ -187,41 +216,7 @@ export async function createPlainWasmEngine(
     emit({ t: "progress", epoch, phase: "typesetting" });
     let result = session.advance();
     while (result.kind === "need-resources") {
-      const responses: ResourceResponse[] = [];
-      const missing: ResourceRequest[] = [];
-      for (const request of result.required) {
-        if (request.type === "file") {
-          const bytes = tfms.get(request.name);
-          if (!bytes) {
-            missing.push(request);
-            continue;
-          }
-          responses.push({
-            type: "file",
-            kind: request.kind,
-            name: request.name,
-            virtualPath: `/texlive/fonts/tfm/${request.name}`,
-            bytes,
-          });
-          continue;
-        }
-        const font = htmlFontsByName.get(request.logicalName);
-        if (!font) {
-          missing.push(request);
-          continue;
-        }
-        responses.push({
-          type: "font",
-          logicalName: request.logicalName,
-          faceIndex: request.faceIndex,
-          variations: request.variations,
-          features: request.features,
-          container: "woff2",
-          bytes: font.woff2,
-          objectSha256: font.sha256,
-          provenance: font.provenance,
-        });
-      }
+      const { responses, missing } = fontResources.resolve(result.required);
       if (missing.length > 0) {
         const names = missing.map(resourceName).join(", ");
         diagnostic(epoch, `The quick Plain demo does not bundle resource: ${names}`);
@@ -239,6 +234,7 @@ export async function createPlainWasmEngine(
       diagnostic(epoch, "Umber returned no HTML preview");
       return false;
     }
+    renderedSourceIdentity = readRenderedSourceIdentity(html);
     const bytes = html.slice().buffer;
     emit({ t: "diagnostics", epoch, items: [] });
     emit({ t: "document", epoch, html: bytes });
@@ -289,7 +285,28 @@ export async function createPlainWasmEngine(
         return;
       }
       if (message.t === "renderedSource") {
-        const location = session?.renderedSourceLocation(message.page, message.event, message.unit);
+        const identity = renderedSourceIdentity;
+        const result =
+          session && identity
+            ? session.renderedSourceLocation(
+                message.page,
+                message.event,
+                message.unit,
+                identity.output,
+                identity.revision,
+              )
+            : undefined;
+        const location =
+          result?.kind === "current" && identity
+            ? {
+                revision: identity.revision,
+                path: result.path,
+                start: result.start,
+                end: result.end,
+                line: result.line,
+                column: result.column,
+              }
+            : undefined;
         emit({ t: "renderedSource", requestId: message.requestId, location });
         return;
       }
@@ -330,4 +347,15 @@ export async function createPlainWasmEngine(
 
 function resourceName(request: ResourceRequest): string {
   return request.type === "font" ? request.logicalName : request.name;
+}
+
+function readRenderedSourceIdentity(
+  html: Uint8Array,
+): { output: string; revision: number } | undefined {
+  const text = new TextDecoder().decode(html);
+  const output = /data-umber-output="([0-9a-f]{32})"/.exec(text)?.[1];
+  const revisionText = /data-umber-revision="(\d+)"/.exec(text)?.[1];
+  if (!output || !revisionText) return undefined;
+  const revision = Number(revisionText);
+  return Number.isSafeInteger(revision) && revision >= 1 ? { output, revision } : undefined;
 }
