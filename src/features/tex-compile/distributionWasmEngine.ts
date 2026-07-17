@@ -46,7 +46,7 @@ import {
 import {
   collectGeneratedFiles,
   generatedFileMapsEqual,
-  latexJobName,
+  initialLatexGeneratedFiles,
   MAX_LATEX_PASSES,
 } from "./latexPasses";
 import type { FromEngine, ProjectFile, ToEngine } from "./protocol";
@@ -386,10 +386,7 @@ export async function createDistributionWasmEngine(
   ) => {
     entry = nextEntry;
     compileMode = nextCompileMode;
-    generatedFiles =
-      compileMode === "latex"
-        ? new Map([[`${latexJobName(entry)}.aux`, new Uint8Array()]])
-        : new Map();
+    generatedFiles = compileMode === "latex" ? initialLatexGeneratedFiles(entry) : new Map();
     mainDocId = files.find((file) => file.path === entry)?.docId ?? files[0]?.docId ?? "main";
     projectFiles = files.map((file) => ({ ...file, bytes: file.bytes.slice(0) }));
     await createSession();

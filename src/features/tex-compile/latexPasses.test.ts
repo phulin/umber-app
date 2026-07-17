@@ -1,6 +1,11 @@
 import type { CompileOutput } from "@umber/umber-wasm/low-level";
 import { describe, expect, it } from "vitest";
-import { collectGeneratedFiles, generatedFileMapsEqual, latexJobName } from "./latexPasses";
+import {
+  collectGeneratedFiles,
+  generatedFileMapsEqual,
+  initialLatexGeneratedFiles,
+  latexJobName,
+} from "./latexPasses";
 
 const output = (files: CompileOutput["files"]): CompileOutput => ({
   terminal: "",
@@ -14,6 +19,19 @@ describe("LaTeX pass state", () => {
   it("derives the auxiliary job name from a nested entry", () => {
     expect(latexJobName("src/paper.tex")).toBe("paper");
     expect(latexJobName("main")).toBe("main");
+  });
+
+  it("seeds common read-before-write files for the first pass", () => {
+    const generated = initialLatexGeneratedFiles("src/paper.tex");
+
+    expect([...generated.keys()]).toEqual([
+      "paper.aux",
+      "paper.toc",
+      "paper.out",
+      "paper.lof",
+      "paper.lot",
+    ]);
+    expect([...generated.values()].every((bytes) => bytes.byteLength === 0)).toBe(true);
   });
 
   it("normalizes and clones generated output files", () => {
