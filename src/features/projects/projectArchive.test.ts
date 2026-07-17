@@ -9,6 +9,7 @@ describe("project ZIP archives", () => {
       id: "source",
       name: "My paper",
       entry: "src/paper.tex",
+      compileMode: "latex",
       files: {
         "src/paper.tex": new TextEncoder().encode("paper"),
         "figures/pixel.bin": new Uint8Array([0, 255, 4]),
@@ -20,6 +21,7 @@ describe("project ZIP archives", () => {
 
     expect(imported.name).toBe("My paper");
     expect(imported.entry).toBe("src/paper.tex");
+    expect(imported.compileMode).toBe("latex");
     expect([...(await destination.readFile("copy", "figures/pixel.bin"))]).toEqual([0, 255, 4]);
   });
 
@@ -30,9 +32,13 @@ describe("project ZIP archives", () => {
     const bibliography = new File(["bib"], "refs.bib");
     Object.defineProperty(bibliography, "webkitRelativePath", { value: "paper/data/refs.bib" });
 
-    const manifest = await importProjectFiles(store, [main, bibliography], { id: "folder" });
+    const manifest = await importProjectFiles(store, [main, bibliography], {
+      id: "folder",
+      compileMode: "latex",
+    });
 
     expect(manifest.name).toBe("paper");
     expect(manifest.files).toEqual(["data/refs.bib", "main.tex"]);
+    expect(manifest.compileMode).toBe("latex");
   });
 });

@@ -1,9 +1,14 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
-import { normalizeProjectPath, type ProjectManifest, type ProjectStore } from "./projectStore";
+import {
+  normalizeProjectPath,
+  type ProjectCompileMode,
+  type ProjectManifest,
+  type ProjectStore,
+} from "./projectStore";
 
 const archiveManifestPath = ".umber/manifest.json";
 
-type ArchiveManifest = Pick<ProjectManifest, "name" | "entry">;
+type ArchiveManifest = Pick<ProjectManifest, "name" | "entry" | "compileMode">;
 
 export async function exportProjectZip(
   store: ProjectStore,
@@ -12,7 +17,13 @@ export async function exportProjectZip(
   const manifest = await store.getManifest(projectId);
   if (!manifest) throw new Error(`Project not found: ${projectId}`);
   const files: Record<string, Uint8Array> = {
-    [archiveManifestPath]: strToU8(JSON.stringify({ name: manifest.name, entry: manifest.entry })),
+    [archiveManifestPath]: strToU8(
+      JSON.stringify({
+        name: manifest.name,
+        entry: manifest.entry,
+        compileMode: manifest.compileMode,
+      }),
+    ),
   };
   for (const path of manifest.files) files[path] = await store.readFile(projectId, path);
   return zipSync(files, { level: 6 });
@@ -21,7 +32,7 @@ export async function exportProjectZip(
 export async function importProjectZip(
   store: ProjectStore,
   archive: Uint8Array,
-  options: { id?: string; name?: string } = {},
+  options: { id?: string; name?: string; compileMode?: ProjectCompileMode } = {},
 ): Promise<ProjectManifest> {
   const unpacked = unzipSync(archive);
   let archiveManifest: ArchiveManifest | undefined;
@@ -44,6 +55,7 @@ export async function importProjectZip(
     id: options.id,
     name: options.name ?? archiveManifest?.name ?? "Imported project",
     entry,
+    compileMode: options.compileMode ?? archiveManifest?.compileMode ?? "plain",
     files,
   });
 }
@@ -51,7 +63,7 @@ export async function importProjectZip(
 export async function importProjectFiles(
   store: ProjectStore,
   incoming: readonly File[],
-  options: { id?: string; name?: string } = {},
+  options: { id?: string; name?: string; compileMode?: ProjectCompileMode } = {},
 ): Promise<ProjectManifest> {
   if (incoming.length === 0) throw new Error("No project files selected");
   const rawPaths = incoming.map((file) => file.webkitRelativePath || file.name);
@@ -75,6 +87,7 @@ export async function importProjectFiles(
     id: options.id,
     name: options.name ?? commonRoot ?? "Imported project",
     entry,
+    compileMode: options.compileMode ?? "plain",
     files,
   });
 }

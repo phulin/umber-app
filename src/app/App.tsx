@@ -189,6 +189,7 @@ function DemoScreen(props: {
         id: "demo",
         name: "Try Umber",
         entry: "main.tex",
+        compileMode: "plain",
         files: Object.fromEntries(
           demoDocuments.map((document) => [document.path, new TextEncoder().encode(document.text)]),
         ),
@@ -238,6 +239,7 @@ export function App() {
     const project = await projectStore.createProject({
       name: "Umber demo",
       entry: "main.tex",
+      compileMode: "plain",
       files: Object.fromEntries(
         currentDocuments.map((document) => [
           document.path,

@@ -12,6 +12,7 @@ describe("ProjectAutosave", () => {
       id: "demo",
       name: "Demo",
       entry: "main.tex",
+      compileMode: "plain",
       files: { "main.tex": new TextEncoder().encode("initial") },
     });
     const writeFiles = vi.spyOn(store, "writeFiles");
@@ -32,6 +33,7 @@ describe("ProjectAutosave", () => {
       id: "demo",
       name: "Demo",
       entry: "main.tex",
+      compileMode: "plain",
       files: { "main.tex": new TextEncoder().encode("initial") },
     });
     const autosave = new ProjectAutosave(store, "demo", 10_000);

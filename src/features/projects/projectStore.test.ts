@@ -10,6 +10,7 @@ describe("MemoryProjectStore", () => {
       id: "project-1",
       name: "Paper",
       entry: "main.tex",
+      compileMode: "latex",
       files: {
         "main.tex": text("hello"),
         "figures/plot.bin": new Uint8Array([0, 1, 2, 255]),
@@ -17,6 +18,7 @@ describe("MemoryProjectStore", () => {
     });
 
     expect(manifest.files).toEqual(["figures/plot.bin", "main.tex"]);
+    expect(manifest.compileMode).toBe("latex");
     expect(await store.listProjects()).toHaveLength(1);
     expect([...(await store.readFile("project-1", "figures/plot.bin"))]).toEqual([0, 1, 2, 255]);
     const updated = await store.writeFiles(
@@ -27,6 +29,8 @@ describe("MemoryProjectStore", () => {
     expect(new TextDecoder().decode(await store.readFile("project-1", "chapters/one.tex"))).toBe(
       "chapter",
     );
+    const modeUpdated = await store.setCompileMode("project-1", "plain");
+    expect(modeUpdated.compileMode).toBe("plain");
   });
 
   it("rejects archive traversal and absolute paths", () => {

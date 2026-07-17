@@ -1,7 +1,10 @@
+export type ProjectCompileMode = "plain" | "latex";
+
 export type ProjectManifest = {
   id: string;
   name: string;
   entry: string;
+  compileMode: ProjectCompileMode;
   files: string[];
   createdAt: string;
   updatedAt: string;
@@ -11,6 +14,7 @@ export type CreateProjectInput = {
   id?: string;
   name: string;
   entry: string;
+  compileMode: ProjectCompileMode;
   files: Record<string, Uint8Array>;
 };
 
@@ -20,6 +24,7 @@ export interface ProjectStore {
   getManifest(projectId: string): Promise<ProjectManifest | null>;
   readFile(projectId: string, path: string): Promise<Uint8Array>;
   writeFiles(projectId: string, files: ReadonlyMap<string, Uint8Array>): Promise<ProjectManifest>;
+  setCompileMode(projectId: string, compileMode: ProjectCompileMode): Promise<ProjectManifest>;
   deleteProject(projectId: string): Promise<void>;
 }
 
@@ -70,6 +75,7 @@ export class MemoryProjectStore implements ProjectStore {
       id,
       name: input.name,
       entry,
+      compileMode: input.compileMode,
       files: [...files.keys()].sort(),
       createdAt: now,
       updatedAt: now,
@@ -108,6 +114,20 @@ export class MemoryProjectStore implements ProjectStore {
 
   async deleteProject(projectId: string): Promise<void> {
     this.#projects.delete(projectId);
+  }
+
+  async setCompileMode(
+    projectId: string,
+    compileMode: ProjectCompileMode,
+  ): Promise<ProjectManifest> {
+    const project = this.#projects.get(projectId);
+    if (!project) throw new Error(`Project not found: ${projectId}`);
+    project.manifest = {
+      ...project.manifest,
+      compileMode,
+      updatedAt: new Date().toISOString(),
+    };
+    return cloneManifest(project.manifest);
   }
 }
 
@@ -161,6 +181,7 @@ export class OpfsProjectStore implements ProjectStore {
       id,
       name: input.name,
       entry,
+      compileMode: input.compileMode,
       files: [...normalizedFiles.keys()].sort(),
       createdAt: now,
       updatedAt: now,
@@ -211,10 +232,27 @@ export class OpfsProjectStore implements ProjectStore {
     await this.#projects.removeEntry(projectId, { recursive: true });
   }
 
+  async setCompileMode(
+    projectId: string,
+    compileMode: ProjectCompileMode,
+  ): Promise<ProjectManifest> {
+    const directory = await this.#projects.getDirectoryHandle(projectId);
+    const manifest = await this.#readManifest(directory);
+    if (!manifest) throw new Error(`Project manifest not found: ${projectId}`);
+    const next: ProjectManifest = {
+      ...manifest,
+      compileMode,
+      updatedAt: new Date().toISOString(),
+    };
+    await writeJson(directory, "manifest.json", next);
+    return next;
+  }
+
   async #readManifest(directory: FileSystemDirectoryHandle): Promise<ProjectManifest | null> {
     try {
       const handle = await directory.getFileHandle("manifest.json");
-      return JSON.parse(await (await handle.getFile()).text()) as ProjectManifest;
+      const stored = JSON.parse(await (await handle.getFile()).text()) as ProjectManifest;
+      return { ...stored, compileMode: stored.compileMode ?? "plain" };
     } catch (error) {
       if (isNotFound(error)) return null;
       throw error;
