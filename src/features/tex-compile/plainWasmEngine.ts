@@ -4,6 +4,11 @@ import initWasm, {
   packageVersion,
   type ResourceRequest,
 } from "@umber/umber-wasm/low-level";
+import {
+  HttpManifestResolver,
+  TEXLIVE_2026_MANIFEST_SHA256,
+  TEXLIVE_2026_MANIFEST_URL,
+} from "@umber/umber-wasm/manifest-resolver";
 import plainFormatUrl from "@umber/umber-wasm/plain.fmt?url";
 import fontEncodings from "../../assets/fonts/encodings.json";
 import cmbx10FontUrl from "../../assets/fonts/umber-cmbx10.woff2?url";
@@ -37,6 +42,11 @@ import {
   Woff2OpenTypeResolver,
 } from "./fontResourceResolvers";
 import type { FromEngine, ProjectFile, ToEngine } from "./protocol";
+import {
+  CompileAbortCoordinator,
+  type DistributionResolver,
+  resolveResourceBatch,
+} from "./resourceResolution";
 import type { IncrementalTexEngine } from "./wasmEngineAdapter";
 
 const plainFontAssets = {
@@ -216,6 +226,8 @@ export async function createPlainWasmEngine(
     new TfmResourceResolver(tfms),
     new Woff2OpenTypeResolver(fonts.map((font) => font.openType)),
   );
+  const aborts = new CompileAbortCoordinator();
+  let distributionRequest: Promise<DistributionResolver> | undefined;
   let session: CompilerSession | undefined;
   let entry = "main.tex";
   let mainDocId = "main";
@@ -232,35 +244,72 @@ export async function createPlainWasmEngine(
     emit({ t: "progress", epoch, phase: "idle" });
   };
 
-  const advance = (epoch: number): boolean => {
+  const distributionResolver = (signal: AbortSignal): Promise<DistributionResolver> => {
+    if (!distributionRequest) {
+      distributionRequest = HttpManifestResolver.create({
+        manifestUrl: TEXLIVE_2026_MANIFEST_URL,
+        manifestSha256: TEXLIVE_2026_MANIFEST_SHA256,
+        persistentCache: "indexeddb",
+        signal,
+      }).catch((error: unknown) => {
+        distributionRequest = undefined;
+        throw error;
+      });
+    }
+    return distributionRequest;
+  };
+
+  const advance = async (epoch: number): Promise<boolean> => {
     if (!session) return false;
+    const signal = aborts.begin(epoch);
     emit({ t: "progress", epoch, phase: "typesetting" });
-    let result = session.advance();
-    while (result.kind === "need-resources") {
-      const { responses, missing } = fontResources.resolve(result.required);
-      if (missing.length > 0) {
-        const names = missing.map(resourceName).join(", ");
-        diagnostic(epoch, `The quick Plain demo does not bundle resource: ${names}`);
+    try {
+      let result = session.advance();
+      while (result.kind === "need-resources") {
+        const local = fontResources.resolve(result.required);
+        if (local.missing.length === 0) {
+          session.provideResources(local.responses);
+          result = session.advance();
+          continue;
+        }
+        const names = local.missing.map(resourceName).join(", ");
+        emit({ t: "progress", epoch, phase: "fetching", detail: names });
+        const resolver = await distributionResolver(signal);
+        const responses = await resolveResourceBatch(
+          fontResources,
+          resolver,
+          result.required,
+          result.prefetchHints,
+          signal,
+        );
+        if (signal.aborted) return false;
+        session.provideResources(responses);
+        emit({ t: "progress", epoch, phase: "typesetting" });
+        result = session.advance();
+      }
+      if (result.kind === "error") {
+        diagnostic(epoch, result.diagnostic.message);
         return false;
       }
-      session.provideResources(responses);
-      result = session.advance();
-    }
-    if (result.kind === "error") {
-      diagnostic(epoch, result.diagnostic.message);
+      const html = result.output.html;
+      if (!html) {
+        diagnostic(epoch, "Umber returned no HTML preview");
+        return false;
+      }
+      renderedSourceIdentity = readRenderedSourceIdentity(html);
+      const bytes = html.slice().buffer;
+      emit({ t: "diagnostics", epoch, items: [] });
+      emit({ t: "document", epoch, html: bytes });
+      emit({ t: "progress", epoch, phase: "idle" });
+      return true;
+    } catch (error) {
+      if (signal.aborted) return false;
+      emit({ t: "telemetry", metric: "bundle-fetch-failure" });
+      diagnostic(epoch, error instanceof Error ? error.message : String(error));
       return false;
+    } finally {
+      aborts.finish(signal);
     }
-    const html = result.output.html;
-    if (!html) {
-      diagnostic(epoch, "Umber returned no HTML preview");
-      return false;
-    }
-    renderedSourceIdentity = readRenderedSourceIdentity(html);
-    const bytes = html.slice().buffer;
-    emit({ t: "diagnostics", epoch, items: [] });
-    emit({ t: "document", epoch, html: bytes });
-    emit({ t: "progress", epoch, phase: "idle" });
-    return true;
   };
 
   const createSession = () => {
@@ -274,12 +323,12 @@ export async function createPlainWasmEngine(
     for (const file of projectFiles) session.addUserFile(file.path, new Uint8Array(file.bytes));
   };
 
-  const open = (files: ProjectFile[], nextEntry: string) => {
+  const open = async (files: ProjectFile[], nextEntry: string) => {
     entry = nextEntry;
     mainDocId = files.find((file) => file.path === entry)?.docId ?? files[0]?.docId ?? "main";
     projectFiles = files.map((file) => ({ ...file, bytes: file.bytes.slice(0) }));
     createSession();
-    needsColdStart = !advance(0);
+    needsColdStart = !(await advance(0));
   };
 
   const updateMainSource = (fromByte: number, toByte: number, insert: ArrayBuffer) => {
@@ -299,10 +348,14 @@ export async function createPlainWasmEngine(
 
   emit({ t: "ready", engineVersion: packageVersion() });
   return {
-    handle(message: ToEngine) {
-      if (message.t === "init" || message.t === "cancel") return;
+    async handle(message: ToEngine) {
+      if (message.t === "init") return;
+      if (message.t === "cancel") {
+        aborts.cancelBefore(message.beforeEpoch);
+        return;
+      }
       if (message.t === "openProject") {
-        open(message.files, message.entry);
+        await open(message.files, message.entry);
         return;
       }
       if (message.t === "renderedSource") {
@@ -356,10 +409,11 @@ export async function createPlainWasmEngine(
             createSession();
           }
         }
-        needsColdStart = !advance(message.epoch);
+        needsColdStart = !(await advance(message.epoch));
       }
     },
     dispose() {
+      aborts.dispose();
       session?.dispose();
       session = undefined;
     },

@@ -69,9 +69,7 @@ async function boot(message: Extract<ToEngine, { t: "init" }>): Promise<void> {
   await engine.handle(message);
 }
 
-async function handle(raw: unknown): Promise<void> {
-  const message = decodeToEngine(raw);
-  if (!message) return;
+async function handle(message: ToEngine): Promise<void> {
   if (message.t === "init") {
     await boot(message);
     return;
@@ -88,8 +86,14 @@ async function handle(raw: unknown): Promise<void> {
 }
 
 scope.onmessage = (event) => {
+  const message = decodeToEngine(event.data);
+  if (!message) return;
+  if (message.t === "cancel" && engine) {
+    void engine.handle(message);
+    return;
+  }
   messageQueue = messageQueue
-    .then(() => handle(event.data))
+    .then(() => handle(message))
     .catch((error: unknown) => {
       emit({ t: "fatal", message: error instanceof Error ? error.message : String(error) });
     });
