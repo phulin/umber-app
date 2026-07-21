@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "umber_app",
+  "project_id": "07478f6d-fd40-4704-93e6-07b639948dd7"
+}
