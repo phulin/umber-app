@@ -17,6 +17,32 @@ test("renders the app shell", async ({ page }) => {
     .locator("iframe.standalone-preview")
     .evaluate((element) => element.clientWidth);
   expect(pageWidth).toBeLessThanOrEqual(previewWidth);
+  const pagePosition = await preview.locator(".umber-page").evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const root = element.querySelector<HTMLElement>('.umber-box[data-umber-event="0"]');
+    const rootRect = root?.getBoundingClientRect();
+    return {
+      left: rect.left,
+      top: rect.top,
+      centeredLeft: (element.ownerDocument.documentElement.clientWidth - rect.width) / 2,
+      scrollX: element.ownerDocument.defaultView?.scrollX,
+      scrollY: element.ownerDocument.defaultView?.scrollY,
+      margins: rootRect
+        ? {
+            left: rootRect.left - rect.left,
+            right: rect.right - rootRect.right,
+            top: rootRect.top - rect.top,
+            bottom: rect.bottom - rootRect.bottom,
+          }
+        : undefined,
+    };
+  });
+  expect(pagePosition.left).toBeCloseTo(pagePosition.centeredLeft, 0);
+  expect(pagePosition.top).toBeCloseTo(12, 0);
+  expect(pagePosition.scrollX).toBe(0);
+  expect(pagePosition.scrollY).toBe(0);
+  expect(pagePosition.margins?.left).toBeCloseTo(pagePosition.margins?.right ?? -1, 0);
+  expect(pagePosition.margins?.top).toBeCloseTo(pagePosition.margins?.bottom ?? -1, 0);
   const diagnostics = page.locator("details.diagnostics-panel");
   await expect(diagnostics).toHaveAttribute("open", "");
   await diagnostics.locator("summary").click();
@@ -167,16 +193,12 @@ $$\sum_{x}^{y} f(x).$$\bye`,
   const sum = preview.locator(".umber-run-text").filter({ hasText: sumGlyph });
   await expect(sum).toBeVisible();
   await expect(preview.locator(".umber-run-text").filter({ hasText: "≤" })).toBeVisible();
-  const runViewport = await sum.evaluate((element) => {
-    const run = element.closest(".umber-run");
-    return run ? { width: run.clientWidth, height: run.clientHeight } : null;
-  });
-  expect(runViewport?.width).toBeGreaterThan(0);
-  expect(runViewport?.height).toBeGreaterThan(0);
   const [sumBox, upperLimitBox] = await Promise.all([
     sum.boundingBox(),
     preview.locator(".umber-run-text").filter({ hasText: "y" }).first().boundingBox(),
   ]);
+  expect(sumBox?.width).toBeGreaterThan(0);
+  expect(sumBox?.height).toBeGreaterThan(0);
   expect((upperLimitBox?.y ?? 0) + (upperLimitBox?.height ?? 0)).toBeLessThanOrEqual(
     (sumBox?.y ?? 0) + 1,
   );

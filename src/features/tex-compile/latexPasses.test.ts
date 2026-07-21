@@ -5,6 +5,7 @@ import {
   generatedFileMapsEqual,
   initialLatexGeneratedFiles,
   latexJobName,
+  prepareLatexGeneratedInput,
 } from "./latexPasses";
 
 const output = (files: CompileOutput["files"]): CompileOutput => ({
@@ -45,6 +46,16 @@ describe("LaTeX pass state", () => {
 
     expect([...generated.keys()]).toEqual(["paper.aux", "paper.toc"]);
     expect(generated.get("paper.aux")).not.toBe(bytes);
+  });
+
+  it("declares the LaTeX paper size when the auxiliary file is read", () => {
+    const existing = new TextEncoder().encode("\\relax\n");
+    const seeded = prepareLatexGeneratedInput("src/paper.tex", "paper.aux", existing);
+
+    expect(new TextDecoder().decode(seeded)).toBe(
+      "\\relax\\special{papersize=\\the\\paperwidth,\\the\\paperheight}\n\\relax\n",
+    );
+    expect(prepareLatexGeneratedInput("src/paper.tex", "paper.toc", existing)).toBe(existing);
   });
 
   it("detects path, size, and byte changes between passes", () => {

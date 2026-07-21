@@ -56,6 +56,7 @@ import {
   generatedFileMapsEqual,
   initialLatexGeneratedFiles,
   MAX_LATEX_PASSES,
+  prepareLatexGeneratedInput,
 } from "./latexPasses";
 import type { FromEngine, ProjectFile, ToEngine } from "./protocol";
 import { CompileAbortCoordinator, resolveResourceBatch } from "./resourceResolution";
@@ -388,7 +389,11 @@ export async function createDistributionWasmEngine(
     for (const file of projectFiles) session.addUserFile(file.path, new Uint8Array(file.bytes));
     const authoredPaths = new Set(projectFiles.map((file) => file.path));
     for (const [path, bytes] of generatedFiles) {
-      if (!authoredPaths.has(path)) session.addUserFile(path, bytes);
+      if (authoredPaths.has(path)) continue;
+      session.addUserFile(
+        path,
+        compileMode === "latex" ? prepareLatexGeneratedInput(entry, path, bytes) : bytes,
+      );
     }
   };
 

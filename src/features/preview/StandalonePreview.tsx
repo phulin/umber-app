@@ -1,5 +1,6 @@
 import { installHtmlPreview } from "@umber/umber-wasm/html-preview";
 import { createEffect, onCleanup, onMount } from "solid-js";
+import { applyDeclaredPaperSize } from "./paperSize";
 
 export type RenderedPreviewHit = { page: number; event: number; unit?: number };
 export type RenderedPreviewSelection = { start: RenderedPreviewHit; end: RenderedPreviewHit };
@@ -126,6 +127,7 @@ export function StandalonePreview(props: {
     detachPreviewClick?.();
     const document = iframe?.contentDocument;
     if (!document) return;
+    iframe?.contentWindow?.scrollTo(0, 0);
     previewCaret = undefined;
     let dragStart: RenderedPreviewHit | undefined;
     const onClick = (event: MouseEvent) => {
@@ -188,7 +190,7 @@ export function StandalonePreview(props: {
     lastRender = renderKey;
     const fittedHtml = source.replace(
       "</style>",
-      `.umber-document{zoom:${scale.toFixed(4)}}\n.umber-run{width:100%;height:100%;pointer-events:none}\n.umber-run-text{pointer-events:visiblePainted}\n</style>`,
+      `html,body{margin:0;padding:0}\n.umber-document{zoom:${scale.toFixed(4)};padding-top:${(12 / scale).toFixed(4)}px}\n.umber-run{pointer-events:none}\n.umber-run-text{pointer-events:visiblePainted}\n</style>`,
     );
     installHtmlPreview(iframe, new TextEncoder().encode(fittedHtml), { allowDomAccess: true });
   };
@@ -206,7 +208,7 @@ export function StandalonePreview(props: {
   });
 
   createEffect(() => {
-    source = new TextDecoder().decode(props.html);
+    source = applyDeclaredPaperSize(new TextDecoder().decode(props.html));
     lastRender = "";
     render();
   });
