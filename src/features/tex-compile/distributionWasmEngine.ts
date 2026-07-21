@@ -366,7 +366,7 @@ export async function createDistributionWasmEngine(
         diagnostic(epoch, result.diagnostic.message);
         return undefined;
       }
-      return result.output;
+      return "tex" in result.output ? result.output.tex : result.output;
     } catch (error) {
       if (signal.aborted) return undefined;
       emit({ t: "telemetry", metric: "bundle-fetch-failure" });
