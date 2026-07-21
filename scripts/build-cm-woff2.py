@@ -26,11 +26,23 @@ CMU_TEXT_SOURCES = {
         "cmunbx.otf",
         "e956d496776533b0ca1b6e1acaeac896b81b81b908667cbf49840048ed16bd0c",
     ),
+    "cmbx12": (
+        "cmunbx.otf",
+        "e956d496776533b0ca1b6e1acaeac896b81b81b908667cbf49840048ed16bd0c",
+    ),
     "cmcsc10": (
         "cmunrm.otf",
         "5089693f81ed5b83435be7167bf2f93c2608ce92fb3a7e13f6be238a733c38f2",
     ),
     "cmr10": (
+        "cmunrm.otf",
+        "5089693f81ed5b83435be7167bf2f93c2608ce92fb3a7e13f6be238a733c38f2",
+    ),
+    "cmr12": (
+        "cmunrm.otf",
+        "5089693f81ed5b83435be7167bf2f93c2608ce92fb3a7e13f6be238a733c38f2",
+    ),
+    "cmr17": (
         "cmunrm.otf",
         "5089693f81ed5b83435be7167bf2f93c2608ce92fb3a7e13f6be238a733c38f2",
     ),
@@ -68,12 +80,16 @@ LEGACY_MATH_SOURCES = {
     "cmsy7": "583b65bd1857bffc2ab184fcb4aad4e70e12eb05c9ca9f1c58c9a00a86c8bccf",
     "cmsy5": "46da57e5a06866efa9a20f3dd350811b5d3279a5ae789af63e530f1f570e3c7f",
     "cmex10": "791b31aa1db8608d0144b3a40fc0fe53383a60f6b00d0e8fd9f06ac4a11df8cb",
+    "cmex7": "df327fc28dc3ce615dc91399f335ec2e1e646e34929936be16836875d5ffaf54",
 }
 
 LEGACY_ENCODING_SOURCES = {
     "cmbx10": "ca41102968b817bf6e8b22fd6de205ca23bf5088218511cce0c8129e1577cb70",
+    "cmbx12": "c838238f31d86a9f198873dfaf501601a4fc966845b9c59e7dc251c4e85d1f1f",
     "cmcsc10": "06c64598f2ff53539677835e26630083d32abd5258d7e4fa029d742ba213d2f5",
     "cmr10": "fdcede8794018df5f2b58f0905fb20a2b418ed8f67b73ee12445855dfbe5b1be",
+    "cmr12": "9b58bfa828b9553b7c8331cf26c45443b836f8aab62e820b40a5b65c8531dd42",
+    "cmr17": "465827b4702e12f7deea159c8084753ffc27998963de516e490bd7bd5bed41dd",
     "cmr7": "b37e8671820b0753c6e233eaa3230c6ab9cff04e6c4baee312d60ae261e5aba1",
     "cmr5": "84d38aac226b5274baca7a292e2039f5284a35d8a2ae31074a475fad87da310b",
     "cmss10": "c9071fd676395df32520c3d906f2829898ea735f66c40a40578dec3c0ac51738",
@@ -84,8 +100,12 @@ LEGACY_ENCODING_SOURCES = {
 
 TFM_SOURCES = {
     "cmbx10": "ae296e8e41b2b0f73e9a17fdc42c743b9ddcc58d23c30acaa3411206f7824780",
+    "cmbx12": "0eb2f13840155007c2d3c59b074322a3aa7358b9643aa314f3146468ae7f0806",
     "cmcsc10": "0d691f70f365e55b83096764fe0c65338842d704bd5b979ed0c6882f9e17ce0d",
     "cmr10": "87f2d8981927644cbecaf3d639e96e348ea4e7be49d8804468bd8ba9ff3f5244",
+    "cmr12": "1ce8af37ed38e93940829d3540e494eaaddc5201758d036b9074467e70a738dc",
+    "cmr17": "86b6e8a52aae6ad1655e32099e12bd2904b158aba4c8afb74143266d2d9cd18f",
+    "cmex7": "373172fe340e4aede5129b89d65f576bfb1fe6932bd55c38f60bcaa84f3d1188",
     "cmss10": "431472f34665b6243a32936215f2e17d1f124cdf8513e86e2bedc4c3de3f980b",
     "cmsl10": "dcbfc25c5aac16dc2b820e089a00aedef20a1af6d8d3c2efa54f6f17a985d33f",
     "cmti10": "46a66e937f809c4fbe317947b583a14b408aca41ecb835eca3be46391190432a",

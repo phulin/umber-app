@@ -183,6 +183,64 @@ $$\sum_{x}^{y} f(x).$$\bye`,
   await expect(page.getByText("No diagnostics.")).toBeVisible();
 });
 
+test("renders LaTeX title and math fonts used by the sample document", async ({ page }) => {
+  await page.goto("/");
+  const preview = page.frameLocator("iframe.standalone-preview");
+
+  await page.getByRole("combobox", { name: "Project compile format" }).selectOption("latex");
+  await page.waitForTimeout(250);
+  await expect(page.getByRole("status")).toContainText("idle");
+  const editor = page.locator('[role="textbox"]:visible');
+  await editor.focus();
+  await page.keyboard.press("Control+A");
+  await page.keyboard.insertText(String.raw`\documentclass{article}
+\usepackage{amsmath}
+\title{Simple Sample}
+\author{My Name}
+\date{}
+\begin{document}
+\maketitle
+Today I am learning \LaTeX. \LaTeX{} is a great program for writing math.
+Inline math: $a^2+b^2=c^2$.
+\begin{equation}
+\gamma^2+\theta^2=\omega^2
+\end{equation}
+\end{document}`);
+
+  await expect(preview.locator("body")).toContainText("Simple Sample", { timeout: 30_000 });
+  await expect(preview.locator(".umber-run-text").filter({ hasText: "γ" })).toBeVisible();
+  await expect(preview.locator(".umber-run-text").filter({ hasText: "θ" })).toBeVisible();
+  await expect(preview.locator(".umber-run-text").filter({ hasText: "ω" })).toBeVisible();
+  await expect(preview.locator(".umber-run-text").filter({ hasText: "(1)" })).toBeVisible();
+  const logoOffsets = await preview.locator(".umber-page").evaluate((page) => {
+    const runs = Array.from(page.querySelectorAll<SVGTextElement>(".umber-run-text"));
+    const offsets: number[] = [];
+    for (let index = 1; index < runs.length - 3; index += 1) {
+      const a = runs[index];
+      const lRun = runs[index - 1];
+      if (
+        a.textContent !== "A" ||
+        runs[index + 1].textContent !== "T" ||
+        runs[index + 2].textContent !== "E" ||
+        !runs[index + 3].textContent?.startsWith("X") ||
+        !lRun.textContent?.endsWith("L")
+      )
+        continue;
+      const lNode = lRun.firstChild;
+      const lLength = lNode?.textContent?.length ?? 0;
+      if (!lNode || lLength === 0) continue;
+      const lRange = page.ownerDocument.createRange();
+      lRange.setStart(lNode, lLength - 1);
+      lRange.setEnd(lNode, lLength);
+      offsets.push(a.getBoundingClientRect().left - lRange.getBoundingClientRect().left);
+    }
+    return offsets;
+  });
+  expect(logoOffsets).toHaveLength(2);
+  expect(logoOffsets[0]).toBeCloseTo(logoOffsets[1], 2);
+  await expect(page.getByText("No diagnostics.")).toBeVisible();
+});
+
 test("renders packaged TFM and OpenType-only text faces", async ({ page }) => {
   await page.goto("/");
   const editor = page.locator('[role="textbox"]:visible');

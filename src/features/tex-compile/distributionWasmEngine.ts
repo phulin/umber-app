@@ -14,7 +14,9 @@ import {
 import plainFormatUrl from "@umber/umber-wasm/plain.fmt?url";
 import fontEncodings from "../../assets/fonts/encodings.json";
 import cmbx10FontUrl from "../../assets/fonts/umber-cmbx10.woff2?url";
+import cmbx12FontUrl from "../../assets/fonts/umber-cmbx12.woff2?url";
 import cmcsc10FontUrl from "../../assets/fonts/umber-cmcsc10.woff2?url";
+import cmex7FontUrl from "../../assets/fonts/umber-cmex7.woff2?url";
 import cmex10FontUrl from "../../assets/fonts/umber-cmex10.woff2?url";
 import cmmi5FontUrl from "../../assets/fonts/umber-cmmi5.woff2?url";
 import cmmi7FontUrl from "../../assets/fonts/umber-cmmi7.woff2?url";
@@ -22,6 +24,8 @@ import cmmi10FontUrl from "../../assets/fonts/umber-cmmi10.woff2?url";
 import cmr5FontUrl from "../../assets/fonts/umber-cmr5.woff2?url";
 import cmr7FontUrl from "../../assets/fonts/umber-cmr7.woff2?url";
 import cmr10FontUrl from "../../assets/fonts/umber-cmr10.woff2?url";
+import cmr12FontUrl from "../../assets/fonts/umber-cmr12.woff2?url";
+import cmr17FontUrl from "../../assets/fonts/umber-cmr17.woff2?url";
 import cmsl10FontUrl from "../../assets/fonts/umber-cmsl10.woff2?url";
 import cmss10FontUrl from "../../assets/fonts/umber-cmss10.woff2?url";
 import cmsy5FontUrl from "../../assets/fonts/umber-cmsy5.woff2?url";
@@ -30,8 +34,12 @@ import cmsy10FontUrl from "../../assets/fonts/umber-cmsy10.woff2?url";
 import cmti10FontUrl from "../../assets/fonts/umber-cmti10.woff2?url";
 import cmtt10FontUrl from "../../assets/fonts/umber-cmtt10.woff2?url";
 import cmbx10TfmUrl from "../../assets/tfm/cmbx10.tfm?url";
+import cmbx12TfmUrl from "../../assets/tfm/cmbx12.tfm?url";
 import cmcsc10TfmUrl from "../../assets/tfm/cmcsc10.tfm?url";
+import cmex7TfmUrl from "../../assets/tfm/cmex7.tfm?url";
 import cmr10TfmUrl from "../../assets/tfm/cmr10.tfm?url";
+import cmr12TfmUrl from "../../assets/tfm/cmr12.tfm?url";
+import cmr17TfmUrl from "../../assets/tfm/cmr17.tfm?url";
 import cmsl10TfmUrl from "../../assets/tfm/cmsl10.tfm?url";
 import cmss10TfmUrl from "../../assets/tfm/cmss10.tfm?url";
 import cmti10TfmUrl from "../../assets/tfm/cmti10.tfm?url";
@@ -60,6 +68,12 @@ const plainFontAssets = {
     sha256: "d08140bf2e7c5db22bec1c40ef967c1aa03e10a8447830663762407ceb5fd974",
     source: "cmu",
   },
+  cmbx12: {
+    url: cmbx12FontUrl,
+    tfmContentHash: "db05d37802ed7ad967d92edc799c64971694ac52d98231fa936be6d3d1120869",
+    sha256: "94f167037fddef101bf5975eeef030cb4ee3e87ebc6c6c40cdee7763716d4090",
+    source: "cmu",
+  },
   cmcsc10: {
     url: cmcsc10FontUrl,
     tfmContentHash: "582c4da9bc3fc34d63199758881686f9a779b651d73e4cb5aaced37eed818872",
@@ -70,6 +84,18 @@ const plainFontAssets = {
     url: cmr10FontUrl,
     tfmContentHash: "b5aae7453493c924123050ddf8e85ab3395b46099e44f4fa6f39c55bb526b89e",
     sha256: "13279262f0c17ee798af7c581c1e4acd2c317e30000279c3985d8e343af977dd",
+    source: "cmu",
+  },
+  cmr12: {
+    url: cmr12FontUrl,
+    tfmContentHash: "0d3e18cdce701343337ae9d2b78665b0c93649cd30e745277e21ec57ccf3474e",
+    sha256: "9418bffb9b9d6f9657628573ddf1923392beec6aa19dbfc0cbe6db5f9e761320",
+    source: "cmu",
+  },
+  cmr17: {
+    url: cmr17FontUrl,
+    tfmContentHash: "f29bae8d3f23b911e6af7e0bd47f13957c2fa608b53683396cd5821f8670b73e",
+    sha256: "bc7998279d40de03d0b5c12ce640984c0fa580844b27ee70676feda43ba9d7d7",
     source: "cmu",
   },
   cmr7: {
@@ -126,6 +152,12 @@ const plainFontAssets = {
     sha256: "6dc0d0a4e45f188b20b1ab5b07ea507849b8fad8369dc972805a519813d72006",
     source: "ams",
   },
+  cmex7: {
+    url: cmex7FontUrl,
+    tfmContentHash: "71a5fca2b849f9a8de2b207dfd0269bf6a0cb767eb47438ac42835fd835f8d8d",
+    sha256: "0851462176b6a106ff1c51c6ffbc79183203b3e7c216d351e985c379a6c3b67e",
+    source: "ams",
+  },
   cmss10: {
     url: cmss10FontUrl,
     tfmContentHash: "e7dfd2d5819e1ee9f40ea4101caee6c7c72bbb174c7a43f7703d609a3ecd31ad",
@@ -159,8 +191,12 @@ const plainFontProvenance = {
 
 const plainTfmAssetUrls = {
   "cmbx10.tfm": cmbx10TfmUrl,
+  "cmbx12.tfm": cmbx12TfmUrl,
   "cmcsc10.tfm": cmcsc10TfmUrl,
+  "cmex7.tfm": cmex7TfmUrl,
   "cmr10.tfm": cmr10TfmUrl,
+  "cmr12.tfm": cmr12TfmUrl,
+  "cmr17.tfm": cmr17TfmUrl,
   "cmss10.tfm": cmss10TfmUrl,
   "cmsl10.tfm": cmsl10TfmUrl,
   "cmti10.tfm": cmti10TfmUrl,
